@@ -1,0 +1,27 @@
+import React from 'react'
+import Button from './components/Button'
+
+export default function Landing() {
+  return (
+    <div className='min-h-screen flex flex-col items-center justify-center text-center bg-cover bg-no-repeat bg-center px-4'>
+      {/* Title */}
+      <h1 className='text-4xl md:text-5xl font-light tracking-widest mb-2'>
+        CaCOUGHony
+      </h1>
+
+      {/* Divider */}
+      <div className='w-12 h-[1px] bg-gray-400 my-4'></div>
+
+      {/* Synopsis */}
+      <p className='text-gray-600 max-w-md text-lg leading-relaxed mb-8'>
+        Thousands of human health sounds visualized using machine learning.
+      </p>
+
+      {/* Buttons */}
+      <div className='flex flex-col sm:flex-row gap-4'>
+        <Button variant='filled'>EXPLORE</Button>
+        <Button variant='outlined'>ABOUT THIS PROJECT</Button>
+      </div>
+    </div>
+  )
+}
