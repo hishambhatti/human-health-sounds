@@ -1,9 +1,9 @@
 import React from 'react'
 import Button from './components/Button'
 
-export default function Landing() {
+export default function Landing({ handleClickAbout, handleClickExplore }) {
   return (
-    <div className='min-h-screen flex flex-col items-center justify-center text-center bg-cover bg-no-repeat bg-center px-4'>
+    <div className='min-h-screen bg-[#f4f3ef] flex flex-col items-center justify-center text-center bg-cover bg-no-repeat bg-center px-4'>
       {/* Title */}
       <h1 className='text-4xl md:text-5xl font-light tracking-widest mb-2 font-[Poppins,sans-serif]'>
         CaCOUGHony
@@ -19,8 +19,8 @@ export default function Landing() {
 
       {/* Buttons */}
       <div className='flex flex-col sm:flex-row gap-4'>
-        <Button variant='filled'>EXPLORE</Button>
-        <Button variant='outlined'>ABOUT THIS PROJECT</Button>
+        <Button variant='filled' handleClick={handleClickExplore}>EXPLORE</Button>
+        <Button variant='outlined' handleClick={handleClickAbout} >ABOUT THIS PROJECT</Button>
       </div>
     </div>
   )
