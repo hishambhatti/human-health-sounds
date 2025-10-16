@@ -61,8 +61,8 @@ export default function Visualization() {
     const svgRect = svgRef.current.getBoundingClientRect();
 
     setMetadataPos({
-      left: rect.x - svgRect.x + CELL_SIZE * 0.75,
-      top: rect.y - svgRect.y - CELL_SIZE * 2, // above the cell
+      left: rect.x - svgRect.x + CELL_SIZE * 0.5,
+      top: rect.y - svgRect.y - CELL_SIZE * 5, // above the cell
     });
 
     const fileName = selectedData.file_name; // e.g. "f0423_0_sniff"
@@ -98,12 +98,12 @@ export default function Visualization() {
     if (!sel.empty()) {
       sel.raise() // bring to front
       sel.transition()
-        .duration(150)
+        .duration(100)
         .attr("fill", "#d7ecff") // lighter blue
         .attr("stroke", "#5dade2") // light blue border
-        .attr("width", CELL_SIZE * 1.8)
-        .attr("height", CELL_SIZE * 1.8)
-        .attr("transform", `translate(${-CELL_SIZE * 0.4},${-CELL_SIZE * 0.4})`);
+        .attr("width", CELL_SIZE * 8)
+        .attr("height", CELL_SIZE * 8)
+        .attr("transform", `translate(${-CELL_SIZE * 3.5},${-CELL_SIZE * 3.5})`);
     }
   }, [selected]);
 
