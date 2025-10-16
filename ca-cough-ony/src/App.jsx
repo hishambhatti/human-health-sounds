@@ -2,6 +2,7 @@ import React from "react"
 import Landing from "./Landing"
 import { useState } from "react"
 import About from "./About"
+import Visualization from "./Visualization"
 
 export default function App() {
 
@@ -20,6 +21,9 @@ export default function App() {
     <>
       {pageNum === 1 && (
         <Landing handleClickAbout={handleClickAbout} handleClickExplore={handleClickExplore}/>
+      )}
+      {pageNum === 2 && (
+        <Visualization />
       )}
       {pageNum === 3 && (
         <About handleClickExplore={handleClickExplore}/>
