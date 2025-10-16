@@ -23,7 +23,7 @@ export default function App() {
         <Landing handleClickAbout={handleClickAbout} handleClickExplore={handleClickExplore}/>
       )}
       {pageNum === 2 && (
-        <Visualization />
+        <Visualization handleClickAbout={handleClickAbout}/>
       )}
       {pageNum === 3 && (
         <About handleClickExplore={handleClickExplore}/>
