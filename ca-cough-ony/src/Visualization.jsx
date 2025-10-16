@@ -112,30 +112,17 @@ export default function Visualization() {
   const selectedData = dataJson[key];
 
   return (
-    <div style={{ display: "flex", justifyContent: "center", marginTop: 40 }}>
-      <div style={{ position: "relative" }}>
+    <div className="flex justify-center mt-10">
+      <div className="relative">
         <svg id="grid" ref={svgRef}></svg>
 
         {selectedData && (
-          <div
+          <div className="absolute bg-white border border-gray-300 rounded shadow-md p-2 text-xs pointer-events-none whitespace-nowrap h-10 flex items-center justify-center z-10"
             style={{
-              position: "absolute",
               left: metadataPos.left,
               top: metadataPos.top,
               transform: "translate(-50%, -100%)",
-              backgroundColor: "#ffffff",
-              border: "1px solid #ccc",
-              borderRadius: 2,
-              boxShadow: "0px 2px 6px rgba(0,0,0,0.15)",
-              padding: "8px 10px",
-              fontSize: 12,
-              pointerEvents: "none",
-              whiteSpace: "nowrap",
               height: CELL_SIZE * 2, // same height as enlarged cell
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 10
             }}
           >
             {selectedData.id}
