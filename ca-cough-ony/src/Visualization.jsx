@@ -9,6 +9,9 @@ const CELL_GAP = 0
 export default function Visualization() {
   const [selected, setSelected] = useState({ x: 71, y: 71 })
 
+  // Ref to keep track of currently playing sound
+  const [audio, setAudio] = useState(null);
+
   useEffect(() => {
     const svg = d3.select("#grid")
       .attr("width", GRID_SIZE * (CELL_SIZE + CELL_GAP))
@@ -28,10 +31,33 @@ export default function Visualization() {
           .attr("fill", "#fff")
           .attr("stroke", "#ccc")
           .attr("id", `cell-${x}-${y}`)
-          .on("click", () => setSelected({ x, y }));
+          .on("click", () => handleCellClick(x, y));
       }
     }
   }, []);
+
+  const handleCellClick = (x, y) => {
+    setSelected({ x, y });
+
+    const flippedY = GRID_SIZE - 1 - y;
+    const key = `${x}_${flippedY}`;
+    const selectedData = dataJson[key];
+    if (!selectedData) return;
+
+    const fileName = selectedData.file_name; // e.g. "f0423_0_sniff"
+    const audioPath = `/audio/${fileName}.wav`; // from public/audio
+
+    // Stop any currently playing sound
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+
+    // Create and play new audio
+    const newAudio = new Audio(audioPath);
+    newAudio.play();
+    setAudio(newAudio);
+  };
 
   useEffect(() => {
     // Reset all cells
