@@ -7,16 +7,11 @@ const GRID_SIZE = 143
 const CELL_SIZE = 5
 const CELL_GAP = 0
 
-export default function Visualization() {
+export default function Visualization({ handleClickAbout }) {
   const [selected, setSelected] = useState({ x: 71, y: 71 })
   const [metadataPos, setMetadataPos] = useState({ left: 0, top: 0})
   const svgRef = useRef()
   const [audio, setAudio] = useState(null);
-
-  const handleHelpClick = () => {
-    console.log("Help button clicked!");
-    // Implement your help dialog/modal logic here
-  };
 
   const handleZoomIn = () => {
     console.log("Zoom In clicked!");
@@ -128,7 +123,7 @@ export default function Visualization() {
   const selectedData = dataJson[key];
 
   return (
-    <div className="flex justify-center mt-10">
+    <div className="min-h-screen flex justify-center mt-10 bg-[#f4f3ef] font-[Poppins,sans-serif]">
       <div className="relative">
         <svg id="grid" ref={svgRef}></svg>
 
@@ -146,27 +141,18 @@ export default function Visualization() {
         )}
       </div>
 
-      {/* 2. Position the fixed-screen buttons */}
-      {/* ❓ Button: Top Right Corner */}
-      <div className="fixed top-8 right-8 z-20">
-        <IconButton
-          handleClick={handleHelpClick}
-        >
+      <div className="fixed top-6 right-6 z-20">
+        <IconButton handleClick={handleClickAbout}>
           ?
         </IconButton>
       </div>
 
-      {/* ➕ and ➖ Buttons: Clustered at Bottom Right Corner */}
-      <div className="fixed bottom-8 right-8 z-20 flex flex-col items-center space-y-4">
-        <IconButton
-          handleClick={handleZoomIn}
-        >
+      <div className="fixed bottom-6 right-6 z-20 flex flex-col items-center space-y-4">
+        <IconButton handleClick={handleZoomIn}>
           +
         </IconButton>
-        <IconButton
-          handleClick={handleZoomOut}
-        >
-          &minus; {/* HTML entity for minus sign */}
+        <IconButton handleClick={handleZoomOut}>
+          &minus;
         </IconButton>
       </div>
     </div>
