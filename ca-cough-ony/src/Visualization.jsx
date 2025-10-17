@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import * as d3 from "d3";
 import dataJson from "/Users/hishambhatti/Desktop/Projects/human-health-sounds/ca-cough-ony/vocalsound_grid_index_p100.json" // the JSON from Python script
+import IconButton from "./components/IconButton";
 
 const GRID_SIZE = 143
 const CELL_SIZE = 5
@@ -11,6 +12,21 @@ export default function Visualization() {
   const [metadataPos, setMetadataPos] = useState({ left: 0, top: 0})
   const svgRef = useRef()
   const [audio, setAudio] = useState(null);
+
+  const handleHelpClick = () => {
+    console.log("Help button clicked!");
+    // Implement your help dialog/modal logic here
+  };
+
+  const handleZoomIn = () => {
+    console.log("Zoom In clicked!");
+    // Implement zoom in logic (e.g., change CELL_SIZE, re-render)
+  };
+
+  const handleZoomOut = () => {
+    console.log("Zoom Out clicked!");
+    // Implement zoom out logic
+  };
 
   useEffect(() => {
     const svg = d3.select(svgRef.current)
@@ -34,7 +50,7 @@ export default function Visualization() {
     // Draw cells only where metadata exists
     Object.keys(dataJson).forEach(key => {
       const [x, flippedY] = key.split("_").map(Number);
-      const y = GRID_SIZE - 1 - flippedY; // flip back for display consistency
+      const y = GRID_SIZE - 1 - flippedY;
       svg.append("rect")
         .attr("x", x * (CELL_SIZE + CELL_GAP))
         .attr("y", y * (CELL_SIZE + CELL_GAP))
@@ -128,6 +144,30 @@ export default function Visualization() {
             {selectedData.id}
           </div>
         )}
+      </div>
+
+      {/* 2. Position the fixed-screen buttons */}
+      {/* ❓ Button: Top Right Corner */}
+      <div className="fixed top-8 right-8 z-20">
+        <IconButton
+          handleClick={handleHelpClick}
+        >
+          ?
+        </IconButton>
+      </div>
+
+      {/* ➕ and ➖ Buttons: Clustered at Bottom Right Corner */}
+      <div className="fixed bottom-8 right-8 z-20 flex flex-col items-center space-y-4">
+        <IconButton
+          handleClick={handleZoomIn}
+        >
+          +
+        </IconButton>
+        <IconButton
+          handleClick={handleZoomOut}
+        >
+          &minus; {/* HTML entity for minus sign */}
+        </IconButton>
       </div>
     </div>
   );

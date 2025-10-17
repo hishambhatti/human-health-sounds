@@ -1,28 +1,14 @@
-import React from 'react'
+import React from 'react';
 
-export default function IconButton({ icon, handleClick, size = 42, bg = "#fff" }) {
+export default function IconButton({children, handleClick}) {
+
   return (
     <button
       onClick={handleClick}
-      style={{
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        backgroundColor: bg,
-        border: "1.5px solid #ddd",
-        boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        cursor: "pointer",
-        transition: "all 0.2s ease",
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f9f9f9")}
-      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = bg)}
+      // Combine base styles, dynamic colors, and hover styles
+      className="w-13 h-13 rounded-full flex items-center justify-center text-lg font-semibold cursor-pointer border text-blue-300 border-gray-300 transition-colors duration-200 bg-white"
     >
-      <span style={{ fontSize: 18, color: "#333", fontWeight: 500 }}>
-        {icon}
-      </span>
+      {children}
     </button>
-  );
+  )
 }
