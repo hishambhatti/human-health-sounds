@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import * as d3 from "d3";
 import dataJson from "/Users/hishambhatti/Desktop/Projects/human-health-sounds/ca-cough-ony/vocalsound_grid_index_p100.json" // the JSON from Python script
 import IconButton from "./components/IconButton";
@@ -23,43 +23,7 @@ export default function Visualization({ handleClickAbout }) {
     // Implement zoom out logic
   };
 
-  useEffect(() => {
-    const svg = d3.select(svgRef.current)
-      .attr("width", GRID_SIZE * (CELL_SIZE + CELL_GAP))
-      .attr("height", GRID_SIZE * (CELL_SIZE + CELL_GAP))
-      .style("background-color", "#fff");
-
-    // Clear previous
-    svg.selectAll("*").remove();
-
-    // Draw outer border so you can see full 143x143 bounds
-    svg.append("rect")
-      .attr("x", 0)
-      .attr("y", 0)
-      .attr("width", GRID_SIZE * (CELL_SIZE + CELL_GAP))
-      .attr("height", GRID_SIZE * (CELL_SIZE + CELL_GAP))
-      .attr("fill", "none")
-      .attr("stroke", "#999")
-      .attr("stroke-width", 1.5);
-
-    // Draw cells only where metadata exists
-    Object.keys(dataJson).forEach(key => {
-      const [x, flippedY] = key.split("_").map(Number);
-      const y = GRID_SIZE - 1 - flippedY;
-      svg.append("rect")
-        .attr("x", x * (CELL_SIZE + CELL_GAP))
-        .attr("y", y * (CELL_SIZE + CELL_GAP))
-        .attr("width", CELL_SIZE)
-        .attr("height", CELL_SIZE)
-        .attr("fill", "#fff")
-        .attr("stroke", "#ccc")
-        .attr("id", `cell-${x}-${y}`)
-        .style("cursor", "pointer")
-        .on("click", (event) => handleCellClick(x, y, event));
-    });
-  }, []);
-
-  const handleCellClick = (x, y, event) => {
+  const handleCellClick = useCallback((x, y, event) => {
     setSelected({ x, y });
 
     const flippedY = GRID_SIZE - 1 - y;
@@ -89,41 +53,75 @@ export default function Visualization({ handleClickAbout }) {
     const newAudio = new Audio(audioPath);
     newAudio.play();
     setAudio(newAudio);
-  };
+  }, [audio]);
 
   useEffect(() => {
     const svg = d3.select(svgRef.current)
+      .attr("width", GRID_SIZE * (CELL_SIZE + CELL_GAP))
+      .attr("height", GRID_SIZE * (CELL_SIZE + CELL_GAP))
+      .style("background-color", "#fff");
+
+    // Draw the grid only once (on first render)
+    if (svg.selectAll("rect").empty()) {
+      // Outer border
+      svg.append("rect")
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("width", GRID_SIZE * (CELL_SIZE + CELL_GAP))
+        .attr("height", GRID_SIZE * (CELL_SIZE + CELL_GAP))
+        .attr("fill", "none")
+        .attr("stroke", "#999")
+        .attr("stroke-width", 1.5);
+
+      // Draw cells
+      Object.keys(dataJson).forEach(key => {
+        const [x, flippedY] = key.split("_").map(Number);
+        const y = GRID_SIZE - 1 - flippedY;
+        svg.append("rect")
+          .attr("x", x * (CELL_SIZE + CELL_GAP))
+          .attr("y", y * (CELL_SIZE + CELL_GAP))
+          .attr("width", CELL_SIZE)
+          .attr("height", CELL_SIZE)
+          .attr("fill", "#fff")
+          .attr("stroke", "#ccc")
+          .attr("id", `cell-${x}-${y}`)
+          .style("cursor", "pointer")
+          .on("click", (event) => handleCellClick(x, y, event));
+      });
+    }
+
+    // === Highlighting logic ===
     // Reset all cells
     svg.selectAll("rect")
       .filter(function () {
-          return d3.select(this).attr("id")?.startsWith("cell-");
-        })
+        return d3.select(this).attr("id")?.startsWith("cell-");
+      })
       .attr("fill", "#fff")
-      .attr("stroke", "#ccc")
+      .attr("stroke", "#999")
       .attr("width", CELL_SIZE)
       .attr("height", CELL_SIZE)
-      .attr("transform", null)
+      .attr("transform", null);
 
-    // Highlight selected
+    // Highlight selected cell
     const sel = d3.select(`#cell-${selected.x}-${selected.y}`);
     if (!sel.empty()) {
-      sel.raise() // bring to front
-      sel.transition()
+      sel.raise()
+        .transition()
         .duration(100)
-        .attr("fill", "#d7ecff") // lighter blue
-        .attr("stroke", "#5dade2") // light blue border
+        .attr("fill", "#d7ecff")
+        .attr("stroke", "#5dade2")
         .attr("width", CELL_SIZE * 8)
         .attr("height", CELL_SIZE * 8)
         .attr("transform", `translate(${-CELL_SIZE * 3.5},${-CELL_SIZE * 3.5})`);
     }
-  }, [selected]);
+  }, [selected, handleCellClick]);
 
   const flippedY = GRID_SIZE - 1 - selected.y;
   const key = `${selected.x}_${flippedY}`;
   const selectedData = dataJson[key];
 
   return (
-    <div className="min-h-screen flex justify-center mt-10 bg-[#f4f3ef] font-[Poppins,sans-serif]">
+    <div className="min-h-screen bg-[#f4f3ef] flex flex-col items-center justify-center font-[Poppins,sans-serif]">
       <div className="relative">
         <svg id="grid" ref={svgRef}></svg>
 
