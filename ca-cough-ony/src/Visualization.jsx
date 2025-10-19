@@ -3,6 +3,31 @@ import * as d3 from "d3";
 import dataJson from "/Users/hishambhatti/Desktop/Projects/human-health-sounds/ca-cough-ony/vocalsound_grid_index_p100.json" // the JSON from Python script
 import IconButton from "./components/IconButton";
 
+const SOUND_TYPE_STYLES = {
+  Sigh: { color: "#5DADE2", emoji: "🥱" },
+  Throatclearing: { color: "#F5B041", emoji: "😤" },
+  Sniff: { color: "#48C9B0", emoji: "👃" },
+  Laughter: { color: "#E84393", emoji: "😂" },
+  Sneeze: { color: "#E74C3C", emoji: "🤧" },
+  Cough: { color: "#8E44AD", emoji: "😮‍💨" },
+};
+
+const GENDER_COLORS = {
+  Male: "#3498DB",
+  Female: "#E84393",
+};
+
+const AGE_COLORS = (age) => {
+  const n = Number(age);
+  if (n >= 18 && n <= 24) return "#2ECC71";
+  if (n >= 25 && n <= 34) return "#F1C40F";
+  if (n >= 35 && n <= 44) return "#E67E22";
+  if (n >= 45 && n <= 54) return "#E74C3C";
+  if (n >= 55 && n <= 64) return "#9B59B6";
+  if (n >= 65) return "#9B59B6";
+  return "#BDC3C7"; // fallback gray
+};
+
 const GRID_SIZE = 143
 const CELL_SIZE = 5
 const CELL_GAP = 0
@@ -126,17 +151,50 @@ export default function Visualization({ handleClickAbout }) {
     <div className="min-h-screen bg-[#f4f3ef] flex flex-col items-center justify-center font-[Poppins,sans-serif]">
       <div className="relative">
         <svg id="grid" ref={svgRef}></svg>
-
         {selectedData && (
-          <div className="absolute bg-white border border-gray-300 rounded shadow-md p-2 text-xs pointer-events-none whitespace-nowrap h-10 flex items-center justify-center z-10"
+          <div
+            className="absolute bg-white border border-gray-300 rounded-lg shadow-md px-3 py-2 text-xs pointer-events-none z-10 flex items-center justify-between"
             style={{
               left: metadataPos.left,
               top: metadataPos.top,
-              transform: "translate(-50%, -100%)",
-              height: CELL_SIZE * 2, // same height as enlarged cell
+              transform: "translate(-50%, -120%)",
+              minWidth: 130,
             }}
           >
-            {selectedData.id}
+            <div className="flex flex-col leading-tight">
+              <div className="flex items-center space-x-2 text-base">
+                <span className="font-bold text-black">{selectedData.id}</span>
+                <span
+                  style={{
+                    color: SOUND_TYPE_STYLES[selectedData.sound_type]?.color || "#555",
+                    fontWeight: 600,
+                  }}
+                >
+                  {selectedData.sound_type}
+                </span>
+              </div>
+              <div className="flex items-center space-x-1 mt-1">
+                <span
+                  style={{
+                    color: GENDER_COLORS[selectedData.gender] || "#555",
+                    fontWeight: 600,
+                  }}
+                >
+                  {selectedData.gender}
+                </span>
+                <span
+                  style={{
+                    color: AGE_COLORS(selectedData.age),
+                    fontWeight: 600,
+                  }}
+                >
+                  {selectedData.age}
+                </span>
+              </div>
+            </div>
+            <div className="ml-2 text-2xl">
+              {SOUND_TYPE_STYLES[selectedData.sound_type]?.emoji || "🎧"}
+            </div>
           </div>
         )}
       </div>
