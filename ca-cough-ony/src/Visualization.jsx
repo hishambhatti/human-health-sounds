@@ -23,7 +23,7 @@ export default function Visualization({ handleClickAbout }) {
     // Implement zoom out logic
   };
 
-  const handleCellClick = useCallback((x, y, event) => {
+  const handleCellClick = useCallback((x, y) => {
     setSelected({ x, y });
 
     const flippedY = GRID_SIZE - 1 - y;
@@ -31,25 +31,21 @@ export default function Visualization({ handleClickAbout }) {
     const selectedData = dataJson[key];
     if (!selectedData) return;
 
-    // Compute metadata position relative to SVG
-    const rect = event.target.getBoundingClientRect();
-    const svgRect = svgRef.current.getBoundingClientRect();
+    // === FIX: Compute metadata position from grid coordinates ===
+    const left = x * (CELL_SIZE + CELL_GAP) + CELL_SIZE / 2;
+    const top = y * (CELL_SIZE + CELL_GAP) - CELL_SIZE * 5;
 
-    setMetadataPos({
-      left: rect.x - svgRect.x + CELL_SIZE * 0.5,
-      top: rect.y - svgRect.y - CELL_SIZE * 5, // above the cell
-    });
+    setMetadataPos({ left, top });
 
-    const fileName = selectedData.file_name; // e.g. "f0423_0_sniff"
-    const audioPath = `/audio/${fileName}.wav`; // from public/audio
+    // === Audio playback logic ===
+    const fileName = selectedData.file_name;
+    const audioPath = `/audio/${fileName}.wav`;
 
-    // Stop any currently playing sound
     if (audio) {
       audio.pause();
       audio.currentTime = 0;
     }
 
-    // Create and play new audio
     const newAudio = new Audio(audioPath);
     newAudio.play();
     setAudio(newAudio);
