@@ -84,6 +84,12 @@ export default function Visualization({ handleClickAbout }) {
           .style("cursor", "pointer")
           .on("click", (event) => handleCellClick(x, y, event));
       });
+
+      // On initialization, render the metadata correctly
+      const { x, y } = selected;
+      const left = x * (CELL_SIZE + CELL_GAP) + CELL_SIZE / 2;
+      const top = y * (CELL_SIZE + CELL_GAP) - CELL_SIZE * 5;
+      setMetadataPos({ left, top });
     }
 
     // === Highlighting logic ===
