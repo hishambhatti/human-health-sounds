@@ -58,25 +58,20 @@ export default function Visualization({ handleClickAbout }) {
     const selectedData = dataJson[key];
     if (!selectedData) return;
 
-    // === FIX: Compute metadata position from grid coordinates ===
+    // Compute metadata position
     const left = x * (CELL_SIZE + CELL_GAP) + CELL_SIZE / 2;
     const top = y * (CELL_SIZE + CELL_GAP) - CELL_SIZE * 5;
-
     setMetadataPos({ left, top });
 
-    // === Audio playback logic ===
+    // Create and play a new Audio instance
     const fileName = selectedData.file_name;
     const audioPath = `/audio/${fileName}.wav`;
-
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
-    }
-
     const newAudio = new Audio(audioPath);
-    newAudio.play();
+    newAudio.play().catch(() => {}); // Prevent unhandled promise errors
+
+    // Optionally track the most recent one if needed
     setAudio(newAudio);
-  }, [audio]);
+  }, []);
 
   useEffect(() => {
     const svg = d3.select(svgRef.current)
@@ -84,20 +79,15 @@ export default function Visualization({ handleClickAbout }) {
       .attr("height", GRID_SIZE * (CELL_SIZE + CELL_GAP))
       .style("background-color", "#fff");
 
-    // === Clear existing cells (but not outer border) ===
-    svg.selectAll("rect")
-      .filter(function () {
-        return d3.select(this).attr("id")?.startsWith("cell-");
-      })
-      .remove();
+    svg.selectAll("rect").remove();
 
-    // === Draw cells based on active filters ===
+    const activeFilters = filters.filter(f => f.active).map(f => f.name);
+
+    console.log("Reran everything")
     Object.keys(dataJson).forEach(key => {
       const [x, flippedY] = key.split("_").map(Number);
       const data = dataJson[key];
       const y = GRID_SIZE - 1 - flippedY;
-
-      const activeFilters = filters.filter(f => f.active).map(f => f.name);
 
       const matches =
         activeFilters.length === 0 ||
@@ -118,20 +108,31 @@ export default function Visualization({ handleClickAbout }) {
         .attr("stroke", "#ccc")
         .attr("id", `cell-${x}-${y}`)
         .style("cursor", "pointer")
-        .on("click", (event) => handleCellClick(x, y, event));
+        .on("click", () => handleCellClick(x, y));
     });
+  }, [filters, handleCellClick]);
 
-    // === Highlight selected cell ===
-    svg.selectAll("rect")
-      .attr("fill", "#fff")
-      .attr("stroke", "#999")
-      .attr("width", CELL_SIZE)
-      .attr("height", CELL_SIZE)
-      .attr("transform", null);
+  const prevSelected = useRef(selected);
 
-    const sel = d3.select(`#cell-${selected.x}-${selected.y}`);
-    if (!sel.empty()) {
-      sel.raise()
+  useEffect(() => {
+    const svg = d3.select(svgRef.current);
+
+    // Reset previous selection
+    const prev = prevSelected.current;
+    const prevCell = svg.select(`#cell-${prev.x}-${prev.y}`);
+    if (!prevCell.empty()) {
+      prevCell
+        .attr("fill", "#fff")
+        .attr("stroke", "#ccc")
+        .attr("width", CELL_SIZE)
+        .attr("height", CELL_SIZE)
+        .attr("transform", null);
+    }
+
+    // Highlight new selection
+    const currCell = svg.select(`#cell-${selected.x}-${selected.y}`);
+    if (!currCell.empty()) {
+      currCell.raise()
         .transition()
         .duration(100)
         .attr("fill", "#d7ecff")
@@ -140,7 +141,9 @@ export default function Visualization({ handleClickAbout }) {
         .attr("height", CELL_SIZE * 8)
         .attr("transform", `translate(${-CELL_SIZE * 3.5},${-CELL_SIZE * 3.5})`);
     }
-  }, [selected, handleCellClick, filters]);
+
+    prevSelected.current = selected;
+  }, [selected]);
 
   const flippedY = GRID_SIZE - 1 - selected.y;
   const key = `${selected.x}_${flippedY}`;
