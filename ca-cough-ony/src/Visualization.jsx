@@ -29,6 +29,15 @@ const AGE_COLORS = (age) => {
   return "#BDC3C7"; // fallback gray
 };
 
+const AGE_RANGES = [
+  { label: "18–24", min: 18, max: 24 },
+  { label: "25–34", min: 25, max: 34 },
+  { label: "35–44", min: 35, max: 44 },
+  { label: "45–54", min: 45, max: 54 },
+  { label: "55–64", min: 55, max: 64 },
+  { label: "65+", min: 65, max: Infinity },
+];
+
 const GRID_SIZE = 143
 const CELL_SIZE = 5
 const CELL_GAP = 0
@@ -37,7 +46,6 @@ export default function Visualization({ handleClickAbout }) {
   const [selected, setSelected] = useState({ x: 71, y: 71 })
   const [metadataPos, setMetadataPos] = useState({ left: 0, top: 0})
   const svgRef = useRef()
-  const [audio, setAudio] = useState(null);
   const [filters, setFilters] = useState([]);
 
   const handleZoomIn = () => {
@@ -68,9 +76,6 @@ export default function Visualization({ handleClickAbout }) {
     const audioPath = `/audio/${fileName}.wav`;
     const newAudio = new Audio(audioPath);
     newAudio.play().catch(() => {}); // Prevent unhandled promise errors
-
-    // Optionally track the most recent one if needed
-    setAudio(newAudio);
   }, []);
 
   useEffect(() => {
@@ -83,7 +88,6 @@ export default function Visualization({ handleClickAbout }) {
 
     const activeFilters = filters.filter(f => f.active).map(f => f.name);
 
-    console.log("Reran everything")
     Object.keys(dataJson).forEach(key => {
       const [x, flippedY] = key.split("_").map(Number);
       const data = dataJson[key];
@@ -91,11 +95,19 @@ export default function Visualization({ handleClickAbout }) {
 
       const matches =
         activeFilters.length === 0 ||
-        activeFilters.every(
-          (f) =>
-            f === data.gender ||
-            f.toLowerCase() === data.sound_type.toLowerCase()
-        );
+        activeFilters.every((f) => {
+          // Gender or sound type match
+          if (f === data.gender || f.toLowerCase() === data.sound_type.toLowerCase()) return true;
+
+          // Age range match
+          const ageLabel = f.replace("Age: ", "");
+          const range = AGE_RANGES.find((r) => r.label === ageLabel);
+          if (range) {
+            const ageNum = Number(data.age);
+            return ageNum >= range.min && ageNum <= range.max;
+          }
+          return false;
+      });
 
       if (!matches) return;
 
@@ -220,6 +232,10 @@ export default function Visualization({ handleClickAbout }) {
         <SearchBar
           filters={filters}
           setFilters={setFilters}
+          SOUND_TYPE_STYLES={SOUND_TYPE_STYLES}
+          GENDER_COLORS={GENDER_COLORS}
+          AGE_RANGES={AGE_RANGES}
+          AGE_COLORS={AGE_COLORS}
         />
       </div>
     </div>

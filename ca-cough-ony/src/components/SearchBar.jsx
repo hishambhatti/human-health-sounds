@@ -1,29 +1,28 @@
 import React, { useState } from "react";
 import { Search } from "lucide-react";
 
-const SOUND_TYPE_STYLES = {
-  Sigh: { color: "#5DADE2" },
-  Throatclearing: { color: "#F5B041" },
-  Sniff: { color: "#48C9B0" },
-  Laughter: { color: "#E84393" },
-  Sneeze: { color: "#E74C3C" },
-  Cough: { color: "#8E44AD" },
-};
-
-const GENDER_COLORS = {
-  Male: "#3498DB",
-  Female: "#E84393",
-};
-
-export default function SearchBar({ filters, setFilters }) {
+export default function SearchBar({
+  filters,
+  setFilters,
+  SOUND_TYPE_STYLES,
+  GENDER_COLORS,
+  AGE_RANGES,
+  AGE_COLORS,
+}) {
   const [query, setQuery] = useState("");
 
+  // Add the "Age: ..." label to each age range
   const options = [
     ...Object.keys(SOUND_TYPE_STYLES),
-    ...Object.keys(GENDER_COLORS)
+    ...Object.keys(GENDER_COLORS),
+    ...AGE_RANGES.map((r) => `Age: ${r.label}`),
   ];
 
   const getColor = (option) => {
+    if (option.startsWith("Age: ")) {
+      const label = option.replace("Age: ", "");
+      return AGE_COLORS(label.split("–")[0] || label.replace("+", ""));
+    }
     return (
       SOUND_TYPE_STYLES[option]?.color ||
       GENDER_COLORS[option] ||
@@ -46,15 +45,31 @@ export default function SearchBar({ filters, setFilters }) {
   const handleSelect = (option) => {
     setFilters((prev) => {
       const exists = prev.some((f) => f.name === option);
-      if (exists) return prev; // already in list
+      if (exists) return prev;
       return [...prev, { name: option, active: true }];
     });
     setQuery("");
   };
 
-  const filteredOptions = options.filter((opt) =>
-    opt.toLowerCase().includes(query.toLowerCase())
-  );
+  // Enhanced filtering logic
+  const filteredOptions = options.filter((opt) => {
+    const q = query.toLowerCase();
+
+    // Text match
+    if (opt.toLowerCase().includes(q)) return true;
+
+    // Number search: match if user types a number that falls in an age range
+    if (!isNaN(Number(q))) {
+      const num = Number(q);
+      if (opt.startsWith("Age: ")) {
+        const label = opt.replace("Age: ", "");
+        const range = AGE_RANGES.find((r) => r.label === label);
+        if (range && num >= range.min && num <= range.max) return true;
+      }
+    }
+
+    return false;
+  });
 
   return (
     <div className="w-full flex flex-col items-center">
@@ -63,7 +78,7 @@ export default function SearchBar({ filters, setFilters }) {
         <Search size={18} className="text-gray-400 mr-2" />
         <input
           type="text"
-          placeholder="Search sound or gender"
+          placeholder="Search sound, gender, or age"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="w-full text-sm outline-none"
@@ -87,12 +102,15 @@ export default function SearchBar({ filters, setFilters }) {
       )}
 
       {/* Filter tags */}
-      <div className="fixed bottom-4 flex space-x-2 bg-white px-3 py-2 rounded-lg shadow-md">
+      {filters.length > 0 && (<div className="fixed bottom-4 flex space-x-2 bg-white px-3 py-2 rounded-lg shadow-md">
         {filters.map((f) => (
           <div
             key={f.name}
             className="flex items-center space-x-2 px-2 py-1 rounded-md border"
-            style={{ borderColor: getColor(f.name), opacity: f.active ? 1 : 0.5 }}
+            style={{
+              borderColor: getColor(f.name),
+              opacity: f.active ? 1 : 0.5,
+            }}
           >
             <input
               type="checkbox"
@@ -114,7 +132,7 @@ export default function SearchBar({ filters, setFilters }) {
             </button>
           </div>
         ))}
-      </div>
+      </div>)}
     </div>
   );
 }
