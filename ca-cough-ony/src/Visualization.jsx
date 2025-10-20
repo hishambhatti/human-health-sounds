@@ -38,7 +38,7 @@ export default function Visualization({ handleClickAbout }) {
   const [metadataPos, setMetadataPos] = useState({ left: 0, top: 0})
   const svgRef = useRef()
   const [audio, setAudio] = useState(null);
-  const [activeFilters, setActiveFilters] = useState([]);
+  const [filters, setFilters] = useState([]);
 
   const handleZoomIn = () => {
     console.log("Zoom In clicked!");
@@ -97,6 +97,8 @@ export default function Visualization({ handleClickAbout }) {
       const data = dataJson[key];
       const y = GRID_SIZE - 1 - flippedY;
 
+      const activeFilters = filters.filter(f => f.active).map(f => f.name);
+
       const matches =
         activeFilters.length === 0 ||
         activeFilters.every(
@@ -138,7 +140,7 @@ export default function Visualization({ handleClickAbout }) {
         .attr("height", CELL_SIZE * 8)
         .attr("transform", `translate(${-CELL_SIZE * 3.5},${-CELL_SIZE * 3.5})`);
     }
-  }, [selected, handleCellClick, activeFilters]);
+  }, [selected, handleCellClick, filters]);
 
   const flippedY = GRID_SIZE - 1 - selected.y;
   const key = `${selected.x}_${flippedY}`;
@@ -213,8 +215,8 @@ export default function Visualization({ handleClickAbout }) {
 
       <div className="fixed top-6 left-6 z-20">
         <SearchBar
-          activeFilters={activeFilters}
-          setActiveFilters={setActiveFilters}
+          filters={filters}
+          setFilters={setFilters}
         />
       </div>
     </div>

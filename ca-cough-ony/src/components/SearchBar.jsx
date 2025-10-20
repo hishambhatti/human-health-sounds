@@ -15,7 +15,7 @@ const GENDER_COLORS = {
   Female: "#E84393",
 };
 
-export default function SearchBar({ activeFilters, setActiveFilters }) {
+export default function SearchBar({ filters, setFilters }) {
   const [query, setQuery] = useState("");
 
   const options = [
@@ -23,28 +23,33 @@ export default function SearchBar({ activeFilters, setActiveFilters }) {
     ...Object.keys(GENDER_COLORS)
   ];
 
-  const handleSelect = (option) => {
-    if (!activeFilters.includes(option)) {
-      setActiveFilters([...activeFilters, option]);
-      console.log(activeFilters)
-    }
-    setQuery("");
-  };
-
-  const handleRemove = (option) => {
-    setActiveFilters(activeFilters.filter((f) => f !== option));
-  };
-
-  const handleToggle = (option) => {
-    // Placeholder for toggling (you could later store enabled/disabled states)
-  };
-
   const getColor = (option) => {
     return (
       SOUND_TYPE_STYLES[option]?.color ||
       GENDER_COLORS[option] ||
       "#555"
     );
+  };
+
+  const handleToggle = (name) => {
+    setFilters((prev) =>
+      prev.map((f) =>
+        f.name === name ? { ...f, active: !f.active } : f
+      )
+    );
+  };
+
+  const handleRemove = (name) => {
+    setFilters((prev) => prev.filter((f) => f.name !== name));
+  };
+
+  const handleSelect = (option) => {
+    setFilters((prev) => {
+      const exists = prev.some((f) => f.name === option);
+      if (exists) return prev; // already in list
+      return [...prev, { name: option, active: true }];
+    });
+    setQuery("");
   };
 
   const filteredOptions = options.filter((opt) =>
@@ -81,28 +86,28 @@ export default function SearchBar({ activeFilters, setActiveFilters }) {
         </div>
       )}
 
-      {/* Active filter tags */}
+      {/* Filter tags */}
       <div className="fixed bottom-4 flex space-x-2 bg-white px-3 py-2 rounded-lg shadow-md">
-        {activeFilters.map((f) => (
+        {filters.map((f) => (
           <div
-            key={f}
+            key={f.name}
             className="flex items-center space-x-2 px-2 py-1 rounded-md border"
-            style={{ borderColor: getColor(f) }}
+            style={{ borderColor: getColor(f.name), opacity: f.active ? 1 : 0.5 }}
           >
             <input
               type="checkbox"
-              checked
-              onChange={() => handleToggle(f)}
-              style={{ accentColor: getColor(f) }}
+              checked={f.active}
+              onChange={() => handleToggle(f.name)}
+              style={{ accentColor: getColor(f.name) }}
             />
             <span
               className="text-xs font-semibold"
-              style={{ color: getColor(f) }}
+              style={{ color: getColor(f.name) }}
             >
-              {f}
+              {f.name}
             </span>
             <button
-              onClick={() => handleRemove(f)}
+              onClick={() => handleRemove(f.name)}
               className="text-gray-400 hover:text-black text-xs"
             >
               ✕
