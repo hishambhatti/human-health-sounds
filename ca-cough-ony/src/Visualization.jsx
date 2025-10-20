@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import * as d3 from "d3";
 import dataJson from "/Users/hishambhatti/Desktop/Projects/human-health-sounds/ca-cough-ony/vocalsound_grid_index_p100.json" // the JSON from Python script
 import IconButton from "./components/IconButton";
+import SearchBar from "./components/SearchBar";
 
 const SOUND_TYPE_STYLES = {
   Sigh: { color: "#5DADE2", emoji: "🥱" },
@@ -37,6 +38,7 @@ export default function Visualization({ handleClickAbout }) {
   const [metadataPos, setMetadataPos] = useState({ left: 0, top: 0})
   const svgRef = useRef()
   const [audio, setAudio] = useState(null);
+  const [activeFilters, setActiveFilters] = useState([]);
 
   const handleZoomIn = () => {
     console.log("Zoom In clicked!");
@@ -82,54 +84,49 @@ export default function Visualization({ handleClickAbout }) {
       .attr("height", GRID_SIZE * (CELL_SIZE + CELL_GAP))
       .style("background-color", "#fff");
 
-    // Draw the grid only once (on first render)
-    if (svg.selectAll("rect").empty()) {
-      // Outer border
-      svg.append("rect")
-        .attr("x", 0)
-        .attr("y", 0)
-        .attr("width", GRID_SIZE * (CELL_SIZE + CELL_GAP))
-        .attr("height", GRID_SIZE * (CELL_SIZE + CELL_GAP))
-        .attr("fill", "none")
-        .attr("stroke", "#999")
-        .attr("stroke-width", 1.5);
-
-      // Draw cells
-      Object.keys(dataJson).forEach(key => {
-        const [x, flippedY] = key.split("_").map(Number);
-        const y = GRID_SIZE - 1 - flippedY;
-        svg.append("rect")
-          .attr("x", x * (CELL_SIZE + CELL_GAP))
-          .attr("y", y * (CELL_SIZE + CELL_GAP))
-          .attr("width", CELL_SIZE)
-          .attr("height", CELL_SIZE)
-          .attr("fill", "#fff")
-          .attr("stroke", "#ccc")
-          .attr("id", `cell-${x}-${y}`)
-          .style("cursor", "pointer")
-          .on("click", (event) => handleCellClick(x, y, event));
-      });
-
-      // On initialization, render the metadata correctly
-      const { x, y } = selected;
-      const left = x * (CELL_SIZE + CELL_GAP) + CELL_SIZE / 2;
-      const top = y * (CELL_SIZE + CELL_GAP) - CELL_SIZE * 5;
-      setMetadataPos({ left, top });
-    }
-
-    // === Highlighting logic ===
-    // Reset all cells
+    // === Clear existing cells (but not outer border) ===
     svg.selectAll("rect")
       .filter(function () {
         return d3.select(this).attr("id")?.startsWith("cell-");
       })
+      .remove();
+
+    // === Draw cells based on active filters ===
+    Object.keys(dataJson).forEach(key => {
+      const [x, flippedY] = key.split("_").map(Number);
+      const data = dataJson[key];
+      const y = GRID_SIZE - 1 - flippedY;
+
+      const matches =
+        activeFilters.length === 0 ||
+        activeFilters.every(
+          (f) =>
+            f === data.gender ||
+            f.toLowerCase() === data.sound_type.toLowerCase()
+        );
+
+      if (!matches) return;
+
+      svg.append("rect")
+        .attr("x", x * (CELL_SIZE + CELL_GAP))
+        .attr("y", y * (CELL_SIZE + CELL_GAP))
+        .attr("width", CELL_SIZE)
+        .attr("height", CELL_SIZE)
+        .attr("fill", "#fff")
+        .attr("stroke", "#ccc")
+        .attr("id", `cell-${x}-${y}`)
+        .style("cursor", "pointer")
+        .on("click", (event) => handleCellClick(x, y, event));
+    });
+
+    // === Highlight selected cell ===
+    svg.selectAll("rect")
       .attr("fill", "#fff")
       .attr("stroke", "#999")
       .attr("width", CELL_SIZE)
       .attr("height", CELL_SIZE)
       .attr("transform", null);
 
-    // Highlight selected cell
     const sel = d3.select(`#cell-${selected.x}-${selected.y}`);
     if (!sel.empty()) {
       sel.raise()
@@ -141,7 +138,7 @@ export default function Visualization({ handleClickAbout }) {
         .attr("height", CELL_SIZE * 8)
         .attr("transform", `translate(${-CELL_SIZE * 3.5},${-CELL_SIZE * 3.5})`);
     }
-  }, [selected, handleCellClick]);
+  }, [selected, handleCellClick, activeFilters]);
 
   const flippedY = GRID_SIZE - 1 - selected.y;
   const key = `${selected.x}_${flippedY}`;
@@ -212,6 +209,13 @@ export default function Visualization({ handleClickAbout }) {
         <IconButton handleClick={handleZoomOut}>
           &minus;
         </IconButton>
+      </div>
+
+      <div className="fixed top-6 left-6 z-20">
+        <SearchBar
+          activeFilters={activeFilters}
+          setActiveFilters={setActiveFilters}
+        />
       </div>
     </div>
   );
