@@ -26,3 +26,11 @@ Model was based on HeAR: https://huggingface.co/google/hear
 - The VocalSound dataset that we are visualizing
 - Says something about citing them in the paper, will do that if I make a paper about it
 
+3. https://github.com/kylemcdonald/AudioNotebooks/blob/master/Generating%20Spectrograms.ipynb
+
+- Used for generating spectrograms for processed audio
+
+4. https://github.com/kylemcdonald/AudioNotebooks/blob/master/Fingerprints%20to%20t-SNE.ipynb and https://github.com/kylemcdonald/CloudToGrid
+
+- Initial clustering of audio using t-SNE
+- Mapping the t-SNE clustering to a 2D grid
