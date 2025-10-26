@@ -73,7 +73,7 @@ export default function Visualization({ handleClickAbout }) {
 
     // Create and play a new Audio instance
     const fileName = selectedData.file_name;
-    const audioPath = `/audio/${fileName}.wav`;
+    const audioPath = `/audio/audio_processed_${fileName}.wav`;
     const newAudio = new Audio(audioPath);
     newAudio.play().catch(() => {}); // Prevent unhandled promise errors
   }, []);
