@@ -45,8 +45,9 @@ const CELL_GAP = 0
 export default function Visualization({ handleClickAbout }) {
   const [selected, setSelected] = useState({ x: 71, y: 71 })
   const [metadataPos, setMetadataPos] = useState({ left: 0, top: 0})
-  const svgRef = useRef()
+  const canvasRef = useRef()
   const [filters, setFilters] = useState([]);
+  const [images, setImages] = useState({});
 
   const handleZoomIn = () => {
     console.log("Zoom In clicked!");
@@ -58,7 +59,26 @@ export default function Visualization({ handleClickAbout }) {
     // Implement zoom out logic
   };
 
+  // Function to map screen coordinates to grid coordinates
+  const getCellCoordinates = useCallback((e) => {
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scaleX = canvasRef.current.width / rect.width;
+    const scaleY = canvasRef.current.height / rect.height;
+
+    const canvasX = (e.clientX - rect.left) * scaleX;
+    const canvasY = (e.clientY - rect.top) * scaleY;
+
+    // Convert pixel coordinates to grid index
+    const x = Math.floor(canvasX / (CELL_SIZE + CELL_GAP));
+    const y = Math.floor(canvasY / (CELL_SIZE + CELL_GAP));
+
+    return { x, y };
+  }, []);
+
   const handleCellClick = useCallback((x, y) => {
+    // Check if the click is within the grid bounds and on a valid cell
+    if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
+
     setSelected({ x, y });
 
     const flippedY = GRID_SIZE - 1 - y;
@@ -74,18 +94,65 @@ export default function Visualization({ handleClickAbout }) {
     // Create and play a new Audio instance
     const fileName = selectedData.file_name;
     const audioPath = `audio_processed/${fileName}.wav`;
-    console.log(`Trying to play new sound ${fileName}`)
     const newAudio = new Audio(audioPath);
-    newAudio.play().catch(() => {}); // Prevent unhandled promise errors
+    newAudio.play().catch(() => {});
   }, []);
 
-  useEffect(() => {
-    const svg = d3.select(svgRef.current)
-      .attr("width", GRID_SIZE * (CELL_SIZE + CELL_GAP))
-      .attr("height", GRID_SIZE * (CELL_SIZE + CELL_GAP))
-      .style("background-color", "#fff");
+  const handleCanvasClick = useCallback((e) => {
+    const { x, y } = getCellCoordinates(e);
+    handleCellClick(x, y);
+  }, [getCellCoordinates, handleCellClick]);
 
-    svg.selectAll("rect").remove();
+  // --- NEW: Image Pre-loading Effect ---
+  useEffect(() => {
+      const allFileNames = Object.keys(dataJson).map(key => dataJson[key].file_name);
+      let loadedImages = {};
+      let totalToLoad = 0;
+
+      // Filter to only include files that exist in the JSON
+      const uniqueFileNames = [...new Set(allFileNames)];
+      totalToLoad = uniqueFileNames.length;
+      let loadedCount = 0;
+
+      if (totalToLoad === 0) return;
+
+      uniqueFileNames.forEach(fileName => {
+          const img = new Image();
+          const imagePath = `/sparse_spectrograms/${fileName}.png`;
+
+          img.onload = () => {
+              loadedImages[fileName] = img;
+              loadedCount++;
+              if (loadedCount === totalToLoad) {
+                  setImages(loadedImages);
+              }
+          };
+          img.onerror = () => {
+              // Gracefully handle missing images
+              loadedCount++;
+              if (loadedCount === totalToLoad) {
+                  setImages(loadedImages);
+              }
+          };
+          img.src = imagePath;
+      });
+  }, []); // Run only once on mount
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || Object.keys(images).length === 0) return;
+
+    const context = canvas.getContext("2d");
+    const width = GRID_SIZE * (CELL_SIZE + CELL_GAP);
+    const height = GRID_SIZE * (CELL_SIZE + CELL_GAP);
+
+    // Set canvas dimensions
+    canvas.width = width;
+    canvas.height = height;
+
+    // Clear the canvas
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, width, height);
 
     const activeFilters = filters.filter(f => f.active).map(f => f.name);
 
@@ -111,60 +178,102 @@ export default function Visualization({ handleClickAbout }) {
       });
       if (!matches) return;
 
-      svg.append("rect")
-        .attr("x", x * (CELL_SIZE + CELL_GAP))
-        .attr("y", y * (CELL_SIZE + CELL_GAP))
-        .attr("width", CELL_SIZE)
-        .attr("height", CELL_SIZE)
-        .attr("fill", "#fff")
-        .attr("stroke", "#ccc")
-        .attr("id", `cell-${x}-${y}`)
-        .style("cursor", "pointer")
-        .on("click", () => handleCellClick(x, y));
+      const fileName = data.file_name;
+      const image = images[fileName];
+      const drawX = x * (CELL_SIZE + CELL_GAP);
+      const drawY = y * (CELL_SIZE + CELL_GAP);
+
+      if (image) {
+        // Draw the image
+        context.drawImage(image, drawX, drawY, CELL_SIZE, CELL_SIZE);
+        }
     });
-  }, [filters, handleCellClick]);
+  }, [filters, images]);
 
   const prevSelected = useRef(selected);
 
+  // --- SELECTION HIGHLIGHT EFFECT ---
+  // This must run *after* the main draw
   useEffect(() => {
-    const svg = d3.select(svgRef.current);
+    const canvas = canvasRef.current;
+    if (!canvas || !selected) return;
 
-    // Reset previous selection
+    const context = canvas.getContext("2d");
+    const { x, y } = selected;
+    const highlightSize = CELL_SIZE * 8;
+    const offset = CELL_SIZE * 3.5;
+    const drawX = x * (CELL_SIZE + CELL_GAP);
+    const drawY = y * (CELL_SIZE + CELL_GAP);
+    const fileName = dataJson[`${x}_${GRID_SIZE - 1 - y}`]?.file_name;
+    const selectedImage = images[fileName];
+
+    // Redraw the main grid to clear the old selection
+    // NOTE: This will be very fast since it's just pixel copying from the previous draw,
+    // but a truly optimized solution would only clear the local area.
+    // For simplicity, we'll clear the old highlight area and redraw the image at normal size.
+
+    // Clear the old highlight area (assuming the old one was CELL_SIZE * 8)
     const prev = prevSelected.current;
-    const prevCell = svg.select(`#cell-${prev.x}-${prev.y}`);
-    if (!prevCell.empty()) {
-      prevCell
-        .attr("fill", "#fff")
-        .attr("stroke", "#ccc")
-        .attr("width", CELL_SIZE)
-        .attr("height", CELL_SIZE)
-        .attr("transform", null);
+    if (prev && (prev.x !== x || prev.y !== y)) {
+      const prevDrawX = prev.x * (CELL_SIZE + CELL_GAP);
+      const prevDrawY = prev.y * (CELL_SIZE + CELL_GAP);
+
+      // Clear old highlight area
+      context.clearRect(prevDrawX - offset, prevDrawY - offset, highlightSize, highlightSize);
+
+      // Redraw the previously selected image at normal size
+      const prevFileName = dataJson[`${prev.x}_${GRID_SIZE - 1 - prev.y}`]?.file_name;
+      const prevImage = images[prevFileName];
+      if (prevImage) {
+          context.drawImage(prevImage, prevDrawX, prevDrawY, CELL_SIZE, CELL_SIZE);
+      }
     }
 
-    // Highlight new selection
-    const currCell = svg.select(`#cell-${selected.x}-${selected.y}`);
-    if (!currCell.empty()) {
-      currCell.raise()
-        .transition()
-        .duration(100)
-        .attr("fill", "#d7ecff")
-        .attr("stroke", "#5dade2")
-        .attr("width", CELL_SIZE * 8)
-        .attr("height", CELL_SIZE * 8)
-        .attr("transform", `translate(${-CELL_SIZE * 3.5},${-CELL_SIZE * 3.5})`);
+    // Draw NEW Highlight
+    if (selectedImage) {
+      // Draw the background highlight fill
+      context.fillStyle = "#d7ecff"; // Light blue fill
+      context.strokeStyle = "#5dade2"; // Blue stroke
+      context.lineWidth = 1;
+
+      // Draw the background rectangle (scaled up)
+      context.fillRect(drawX - offset, drawY - offset, highlightSize, highlightSize);
+      context.strokeRect(drawX - offset, drawY - offset, highlightSize, highlightSize);
+
+      // Draw the image on top of the highlight
+      // This is where you draw the spectrogram zoomed in
+      context.drawImage(selectedImage, drawX - offset, drawY - offset, highlightSize, highlightSize);
     }
 
     prevSelected.current = selected;
-  }, [selected]);
+  }, [selected, images]); // Depends on selected cell and loaded images
 
   const flippedY = GRID_SIZE - 1 - selected.y;
   const key = `${selected.x}_${flippedY}`;
   const selectedData = dataJson[key];
 
+  // Calculate grid size for the Canvas Wrapper div
+  const wrapperWidth = GRID_SIZE * (CELL_SIZE + CELL_GAP);
+  const wrapperHeight = GRID_SIZE * (CELL_SIZE + CELL_GAP);
+
   return (
     <div className="min-h-screen bg-[#f4f3ef] flex flex-col items-center justify-center font-[Poppins,sans-serif]">
-      <div className="relative">
-        <svg id="grid" ref={svgRef}></svg>
+      <div className="relative" style={{ width: wrapperWidth, height: wrapperHeight }}>
+        {/* Replace SVG with Canvas */}
+        <canvas
+          id="grid"
+          ref={canvasRef}
+          onClick={handleCanvasClick}
+          style={{
+            display: Object.keys(images).length === 0 ? 'none' : 'block', // Hide canvas until images load
+            cursor: 'pointer'
+          }}
+        ></canvas>
+        {Object.keys(images).length === 0 && (
+            <div style={{ padding: '20px', fontSize: '20px' }}>Loading {GRID_SIZE * GRID_SIZE} spectrograms...</div>
+        )}
+
+        {/* Metadata display remains the same */}
         {selectedData && (
           <div
             className="absolute bg-white border border-gray-300 rounded-lg shadow-md px-3 py-2 text-xs pointer-events-none z-10 flex items-center justify-between"
