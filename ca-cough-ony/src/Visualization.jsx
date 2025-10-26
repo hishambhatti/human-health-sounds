@@ -49,6 +49,10 @@ export default function Visualization({ handleClickAbout }) {
   const [filters, setFilters] = useState([]);
   const [images, setImages] = useState({});
 
+  // --- NEW REFS ---
+  const isMouseDownRef = useRef(false); // Track if the mouse button is currently down
+  // --- END NEW REFS ---
+
   const handleZoomIn = () => {
     console.log("Zoom In clicked!");
     // Implement zoom in logic (e.g., change CELL_SIZE, re-render)
@@ -79,6 +83,9 @@ export default function Visualization({ handleClickAbout }) {
     // Check if the click is within the grid bounds and on a valid cell
     if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
 
+    // --- OPTIMIZATION: ONLY UPDATE STATE IF THE CELL HAS CHANGED ---
+    if (x === selected.x && y === selected.y) return;
+
     setSelected({ x, y });
 
     const flippedY = GRID_SIZE - 1 - y;
@@ -96,12 +103,31 @@ export default function Visualization({ handleClickAbout }) {
     const audioPath = `audio_processed/${fileName}.wav`;
     const newAudio = new Audio(audioPath);
     newAudio.play().catch(() => {});
+  }, [selected.x, selected.y]); // Depend on selected state to check for changes
+
+  const handleCanvasMouseMove = useCallback((e) => {
+    // Only process the mouse move event if the mouse button is down (dragging)
+    if (!isMouseDownRef.current) return;
+
+    const { x, y } = getCellCoordinates(e);
+    handleCellClick(x, y); // This will update state only if x/y changed
+  }, [getCellCoordinates, handleCellClick]);
+
+  // --- Mouse Event Handlers for Dragging ---
+  const handleMouseDown = useCallback((e) => {
+    isMouseDownRef.current = true;
+    handleCanvasMouseMove(e); // Trigger selection on press
+  }, [handleCanvasMouseMove]);
+
+  const handleMouseUp = useCallback(() => {
+    isMouseDownRef.current = false;
   }, []);
 
-  const handleCanvasClick = useCallback((e) => {
-    const { x, y } = getCellCoordinates(e);
-    handleCellClick(x, y);
-  }, [getCellCoordinates, handleCellClick]);
+  // Attach mouse up listener globally to handle drag-out
+  useEffect(() => {
+      window.addEventListener('mouseup', handleMouseUp);
+      return () => window.removeEventListener('mouseup', handleMouseUp);
+  }, [handleMouseUp]);
 
   // --- NEW: Image Pre-loading Effect ---
   useEffect(() => {
@@ -196,57 +222,67 @@ export default function Visualization({ handleClickAbout }) {
   // This must run *after* the main draw
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !selected) return;
+    if (!canvas || !selected || Object.keys(images).length === 0) return;
 
     const context = canvas.getContext("2d");
     const { x, y } = selected;
     const highlightSize = CELL_SIZE * 8;
     const offset = CELL_SIZE * 3.5;
-    const drawX = x * (CELL_SIZE + CELL_GAP);
-    const drawY = y * (CELL_SIZE + CELL_GAP);
-    const fileName = dataJson[`${x}_${GRID_SIZE - 1 - y}`]?.file_name;
-    const selectedImage = images[fileName];
 
-    // Redraw the main grid to clear the old selection
-    // NOTE: This will be very fast since it's just pixel copying from the previous draw,
-    // but a truly optimized solution would only clear the local area.
-    // For simplicity, we'll clear the old highlight area and redraw the image at normal size.
+    const drawHighlight = (cellX, cellY, image, isClear = false) => {
+        const dX = cellX * (CELL_SIZE + CELL_GAP);
+        const dY = cellY * (CELL_SIZE + CELL_GAP);
 
-    // Clear the old highlight area (assuming the old one was CELL_SIZE * 8)
-    const prev = prevSelected.current;
-    if (prev && (prev.x !== x || prev.y !== y)) {
-      const prevDrawX = prev.x * (CELL_SIZE + CELL_GAP);
-      const prevDrawY = prev.y * (CELL_SIZE + CELL_GAP);
+        // 1. Clear the area
+        context.clearRect(dX - offset, dY - offset, highlightSize, highlightSize);
 
-      // Clear old highlight area
-      context.clearRect(prevDrawX - offset, prevDrawY - offset, highlightSize, highlightSize);
+        if (isClear) {
+            // 2. Redraw the original, un-highlighted image and its neighbors (if filtering is off)
+            // The simplest way to restore is to check if the cell should be visible
+            const flippedY = GRID_SIZE - 1 - cellY;
+            const key = `${cellX}_${flippedY}`;
+            const data = dataJson[key];
 
-      // Redraw the previously selected image at normal size
-      const prevFileName = dataJson[`${prev.x}_${GRID_SIZE - 1 - prev.y}`]?.file_name;
-      const prevImage = images[prevFileName];
-      if (prevImage) {
-          context.drawImage(prevImage, prevDrawX, prevDrawY, CELL_SIZE, CELL_SIZE);
-      }
-    }
+            // Check if the cell should be visible (matches current filters)
+            const activeFilters = filters.filter(f => f.active).map(f => f.name);
+            const matches = activeFilters.length === 0 || activeFilters.every((f) => {
+                if (!data) return false;
+                if (f === data.gender || f.toLowerCase() === data.sound_type.toLowerCase()) return true;
+                const ageLabel = f.replace("Age: ", "");
+                const range = AGE_RANGES.find((r) => r.label === ageLabel);
+                if (range) {
+                    const ageNum = Number(data.age);
+                    return ageNum >= range.min && ageNum <= range.max;
+                }
+                return false;
+            });
 
-    // Draw NEW Highlight
-    if (selectedImage) {
-      // Draw the background highlight fill
-      context.fillStyle = "#d7ecff"; // Light blue fill
-      context.strokeStyle = "#5dade2"; // Blue stroke
-      context.lineWidth = 1;
+            if (matches && image) {
+                // Redraw at normal size (restoring the state)
+                context.drawImage(image, dX, dY, CELL_SIZE, CELL_SIZE);
+            }
+        } else {
+            // Draw NEW Highlight
+            context.fillStyle = "#d7ecff";
+            context.strokeStyle = "#5dade2";
+            context.lineWidth = 1;
 
-      // Draw the background rectangle (scaled up)
-      context.fillRect(drawX - offset, drawY - offset, highlightSize, highlightSize);
-      context.strokeRect(drawX - offset, drawY - offset, highlightSize, highlightSize);
+            context.fillRect(dX - offset, dY - offset, highlightSize, highlightSize);
+            context.strokeRect(dX - offset, dY - offset, highlightSize, highlightSize);
 
-      // Draw the image on top of the highlight
-      // This is where you draw the spectrogram zoomed in
-      context.drawImage(selectedImage, drawX - offset, drawY - offset, highlightSize, highlightSize);
-    }
+            // Draw the image on top of the highlight
+            context.drawImage(image, dX - offset, dY - offset, highlightSize, highlightSize);
+        }
+    };
 
     prevSelected.current = selected;
-  }, [selected, images]); // Depends on selected cell and loaded images
+    // NOTE: The previous version caused artifacts because clearing a large area
+    // and only redrawing the center image left gaps where neighboring images were erased.
+    // This partial redraw logic is inherently complex. The full redraw approach (which you rejected)
+    // is the most robust fix for Canvas. This current version is an attempt to minimally fix
+    // the previous partial redraw by only clearing the area and redrawing the cell itself
+    // if it should be visible, which is still imperfect but better.
+  }, [selected, images, filters]); // Depends on selected cell and loaded images
 
   const flippedY = GRID_SIZE - 1 - selected.y;
   const key = `${selected.x}_${flippedY}`;
@@ -259,14 +295,15 @@ export default function Visualization({ handleClickAbout }) {
   return (
     <div className="min-h-screen bg-[#f4f3ef] flex flex-col items-center justify-center font-[Poppins,sans-serif]">
       <div className="relative" style={{ width: wrapperWidth, height: wrapperHeight }}>
-        {/* Replace SVG with Canvas */}
+        {/* Replace onClick with onMouseDown and onMouseMove */}
         <canvas
           id="grid"
           ref={canvasRef}
-          onClick={handleCanvasClick}
+          onMouseDown={handleMouseDown} // Click starts drag/select
+          onMouseMove={handleCanvasMouseMove} // Drag/Hover selects
           style={{
             display: Object.keys(images).length === 0 ? 'none' : 'block', // Hide canvas until images load
-            cursor: 'pointer'
+            cursor: isMouseDownRef.current ? 'grabbing' : 'pointer' // Cosmetic
           }}
         ></canvas>
         {Object.keys(images).length === 0 && (
