@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import * as d3 from "d3";
-import dataJson from "/Users/hishambhatti/Desktop/Projects/human-health-sounds/ca-cough-ony/vocalsound_grid_index_p100.json" // the JSON from Python script
+import dataJson from "/Users/hishambhatti/Desktop/Projects/human-health-sounds/ca-cough-ony/vocalsound_processed_grid_index_p50.json"
 import IconButton from "./components/IconButton";
 import SearchBar from "./components/SearchBar";
 
@@ -38,7 +38,7 @@ const AGE_RANGES = [
   { label: "65+", min: 65, max: Infinity },
 ];
 
-const GRID_SIZE = 143
+const GRID_SIZE = 144
 const CELL_SIZE = 5
 const CELL_GAP = 0
 
