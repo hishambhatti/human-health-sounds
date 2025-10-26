@@ -3,5 +3,6 @@ vs_release_16k/audio_16k/*
 
 ca-cough-ony/public/audio
 ca-cough-ony/public/audio_processed
+ca-cough-ony/public/sparse_spectrograms
 
 audio/*

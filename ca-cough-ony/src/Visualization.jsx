@@ -73,7 +73,8 @@ export default function Visualization({ handleClickAbout }) {
 
     // Create and play a new Audio instance
     const fileName = selectedData.file_name;
-    const audioPath = `/audio/audio_processed_${fileName}.wav`;
+    const audioPath = `audio_processed/${fileName}.wav`;
+    console.log(`Trying to play new sound ${fileName}`)
     const newAudio = new Audio(audioPath);
     newAudio.play().catch(() => {}); // Prevent unhandled promise errors
   }, []);
@@ -108,7 +109,6 @@ export default function Visualization({ handleClickAbout }) {
           }
           return false;
       });
-
       if (!matches) return;
 
       svg.append("rect")
