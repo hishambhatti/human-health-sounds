@@ -3,6 +3,7 @@ import Landing from "./Landing"
 import { useState } from "react"
 import About from "./About"
 import Visualization from "./Visualization"
+import FastVisualization from "./FastVisualization"
 
 export default function App() {
 
@@ -23,7 +24,7 @@ export default function App() {
         <Landing handleClickAbout={handleClickAbout} handleClickExplore={handleClickExplore}/>
       )}
       {pageNum === 2 && (
-        <Visualization handleClickAbout={handleClickAbout}/>
+        <FastVisualization handleClickAbout={handleClickAbout}/>
       )}
       {pageNum === 3 && (
         <About handleClickExplore={handleClickExplore}/>
