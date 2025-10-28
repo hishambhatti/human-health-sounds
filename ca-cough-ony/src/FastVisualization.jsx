@@ -86,6 +86,10 @@ export default function FastVisualization({ handleClickAbout }) {
   const zoomIntervalRef = useRef(null);
   const smoothCenterTimeoutRef = useRef(null);
 
+  // Add a useRef to track the last play time
+  const lastPlayTimeRef = useRef(0);
+  const MIN_PLAY_INTERVAL_MS = 100; // e.g., 100 milliseconds
+
   // 🔑 FIX 1: Initialize transform to the absolute top-left state.
   // We will correct it in useEffect.
   const [transform, setTransform] = useState({
@@ -303,6 +307,18 @@ export default function FastVisualization({ handleClickAbout }) {
     setSelected({ x, y });
     const fileName = selectedData.file_name;
     const audioPath = `audio_processed/${fileName}.wav`;
+    // const newAudio = new Audio(audioPath);
+    // newAudio.play().catch(() => {});
+
+    // ... inside handleCellSelect
+    const now = Date.now();
+    if (now - lastPlayTimeRef.current < MIN_PLAY_INTERVAL_MS) {
+        // Skip playing audio if it's too soon
+        return;
+    }
+
+    lastPlayTimeRef.current = now; // Update the last play time
+    // ... rest of the original playback code
     const newAudio = new Audio(audioPath);
     newAudio.play().catch(() => {});
   }, [selected.x, selected.y]);
