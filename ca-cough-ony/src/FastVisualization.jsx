@@ -4,6 +4,7 @@ import * as d3 from "d3";
 import dataJson from "/Users/hishambhatti/Desktop/Projects/human-health-sounds/ca-cough-ony/vocalsound_processed_grid_index_p50.json"
 import IconButton from "./components/IconButton";
 import SearchBar from "./components/SearchBar";
+import ProgressBar from "./components/ProgressBar";
 
 // --- CONSTANTS & HELPER FUNCTIONS (Unchanged) ---
 const SOUND_TYPE_STYLES = {
@@ -48,6 +49,7 @@ const MAX_SCALE = 8.0;
 const ZOOM_FACTOR = 1.02;
 const WHEEL_ZOOM_FACTOR = 1.05;
 const CENTER_SMOOTHING_FACTOR = 0.08;
+const IMAGE_LOAD_PATH = "sparse_spectrograms";
 
 const CANVAS_DRAW_SIZE = GRID_SIZE * (CELL_SIZE + CELL_GAP);
 
@@ -89,6 +91,8 @@ export default function FastVisualization({ handleClickAbout }) {
   // Add a useRef to track the last play time
   const lastPlayTimeRef = useRef(0);
   const MIN_PLAY_INTERVAL_MS = 100; // e.g., 100 milliseconds
+
+  const [loadingProgress, setLoadingProgress] = useState(0);
 
   // 🔑 FIX 1: Initialize transform to the absolute top-left state.
   // We will correct it in useEffect.
@@ -155,13 +159,18 @@ export default function FastVisualization({ handleClickAbout }) {
 
     uniqueFileNames.forEach(fileName => {
       const img = new Image();
-      const imagePath = `/sparse_spectrograms/${fileName}.png`;
+      // Use the constant for the path
+      const imagePath = `/${IMAGE_LOAD_PATH}/${fileName}.png`;
 
       const checkLoadComplete = () => {
         loadedCount++;
+        const newProgress = Math.min(100, Math.round((loadedCount / totalToLoad) * 100)); // Calculate progress
+        setLoadingProgress(newProgress); // 🔑 Update loading progress
+
         if (loadedCount === totalToLoad) {
           setImages(loadedImages);
-          // Removed setTransform here
+          // Set progress to 100 one last time to ensure it is complete
+          setLoadingProgress(100);
         }
       }
 
@@ -170,6 +179,8 @@ export default function FastVisualization({ handleClickAbout }) {
         checkLoadComplete();
       };
       img.onerror = () => {
+        // Still count failed images towards the total, but log the error
+        console.warn(`Failed to load image: ${imagePath}`);
         checkLoadComplete();
       };
       img.src = imagePath;
@@ -486,11 +497,15 @@ export default function FastVisualization({ handleClickAbout }) {
             height: '100%',
           }}
         ></canvas>
+        {/* 🔑 Replaced simple loading div with new ProgressBar component */}
         {(!isGridReady || !initialCenterApplied) && (
+            <ProgressBar progress={loadingProgress} />
+        )}
+        {/* {(!isGridReady || !initialCenterApplied) && (
             <div className="absolute inset-0 flex items-center justify-center text-xl bg-[#f4f3ef]">
               Loading {GRID_SIZE * GRID_SIZE} spectrograms...
             </div>
-        )}
+        )} */}
 
         {/* Metadata display: (Unchanged) */}
         {selectedData && isGridReady && (
@@ -542,41 +557,43 @@ export default function FastVisualization({ handleClickAbout }) {
       </div>
 
       {/* Control Buttons (Zoom Out disabled state updated) */}
-      <div className="fixed top-6 right-6 z-20">
+      {selectedData && isGridReady && (<div>
+        <div className="fixed top-6 right-6 z-20">
         <IconButton handleClick={handleClickAbout}>
           ?
         </IconButton>
-      </div>
+        </div>
 
-      <div className="fixed bottom-6 right-6 z-20 flex flex-col items-center space-y-4">
-        <IconButton
-          onMouseDown={handleZoomInStart}
-          onMouseUp={stopZoom}
-          onMouseLeave={stopZoom}
-          disabled={transform.scale >= MAX_SCALE}
-        >
-          +
-        </IconButton>
-        <IconButton
-          onMouseDown={handleZoomOutStart}
-          onMouseUp={stopZoom}
-          onMouseLeave={stopZoom}
-          disabled={isPerfectlyCentered}
-        >
-          &minus;
-        </IconButton>
-      </div>
+        <div className="fixed bottom-6 right-6 z-20 flex flex-col items-center space-y-4">
+          <IconButton
+            onMouseDown={handleZoomInStart}
+            onMouseUp={stopZoom}
+            onMouseLeave={stopZoom}
+            disabled={transform.scale >= MAX_SCALE}
+          >
+            +
+          </IconButton>
+          <IconButton
+            onMouseDown={handleZoomOutStart}
+            onMouseUp={stopZoom}
+            onMouseLeave={stopZoom}
+            disabled={isPerfectlyCentered}
+          >
+            &minus;
+          </IconButton>
+        </div>
 
-      <div className="fixed top-6 left-6 z-20">
-        <SearchBar
-          filters={filters}
-          setFilters={setFilters}
-          SOUND_TYPE_STYLES={SOUND_TYPE_STYLES}
-          GENDER_COLORS={GENDER_COLORS}
-          AGE_RANGES={AGE_RANGES}
-          AGE_COLORS={AGE_COLORS}
-        />
-      </div>
+        <div className="fixed top-6 left-6 z-20">
+          <SearchBar
+            filters={filters}
+            setFilters={setFilters}
+            SOUND_TYPE_STYLES={SOUND_TYPE_STYLES}
+            GENDER_COLORS={GENDER_COLORS}
+            AGE_RANGES={AGE_RANGES}
+            AGE_COLORS={AGE_COLORS}
+          />
+        </div>
+      </div>)}
     </div>
   );
 }
