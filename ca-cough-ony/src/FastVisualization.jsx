@@ -276,15 +276,22 @@ export default function FastVisualization({ handleClickAbout }) {
 
       const highlightSize = CELL_SIZE * 8;
 
-      setMetadataPos({ left: screenX + (CELL_SIZE * scale) / 2, top: screenY + (CELL_SIZE * CELL_SIZE / 2) });
+      const highlightOffset = (highlightSize - CELL_SIZE * scale) / 2;
+
+      let highlightDrawX = screenX - highlightOffset;
+
+      // Note: CELL_SIZE * CELL_SIZE is a constant to make the metadata the right height above the selection
+      let highlightDrawY = screenY - highlightOffset + CELL_SIZE * CELL_SIZE;
+
+      setMetadataPos({ left: screenX + (CELL_SIZE * scale) / 2, top: highlightDrawY});
 
       if (screenX + highlightSize > 0 && screenY + highlightSize > 0 &&
           screenX < viewWidth && screenY < viewHeight) {
 
         const highlightOffset = (highlightSize - CELL_SIZE * scale) / 2;
 
-        const highlightDrawX = screenX - highlightOffset;
-        const highlightDrawY = screenY - highlightOffset;
+        highlightDrawX = screenX - highlightOffset;
+        highlightDrawY = screenY - highlightOffset;
 
         context.fillStyle = "#d7ecff";
         context.strokeStyle = "#5dade2";
