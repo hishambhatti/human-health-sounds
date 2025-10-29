@@ -43,11 +43,12 @@ const GRID_SIZE = 144
 const CELL_SIZE = 8
 const CELL_GAP = 0
 const INITIAL_SCALE = 2.0;
-const MIN_SCALE = 0.6;
+const MIN_SCALE = 0.5;
 const MAX_SCALE = 8.0;
 const ZOOM_FACTOR = 1.02;
 const WHEEL_ZOOM_FACTOR = 1.05;
 const CENTER_SMOOTHING_FACTOR = 0.08;
+const MIN_PLAY_INTERVAL_MS = 125; // Max 8 playing simultaneously
 const IMAGE_LOAD_PATH = "sparse_spectrograms";
 
 const CANVAS_DRAW_SIZE = GRID_SIZE * (CELL_SIZE + CELL_GAP);
@@ -89,7 +90,6 @@ export default function FastVisualization({ handleClickAbout }) {
 
   // Track last play time for audio buffer
   const lastPlayTimeRef = useRef(0);
-  const MIN_PLAY_INTERVAL_MS = 150;
 
   const [loadingProgress, setLoadingProgress] = useState(0);
 
@@ -319,32 +319,93 @@ export default function FastVisualization({ handleClickAbout }) {
     return { x, y };
   }, [transform]);
 
+  // Add this helper function inside FastVisualization, near your other helper functions
+  const findNearestValidCell = useCallback((startX, startY, currentFilters) => {
+      // Check the start cell first
+      const key = `${startX}_${GRID_SIZE - 1 - startY}`;
+      const data = dataJson[key];
+      if (data && checkFilters(data, currentFilters, AGE_RANGES)) {
+          return { x: startX, y: startY };
+      }
+
+      // Spiral search outwards
+      for (let r = 1; r < GRID_SIZE / 2; r++) { // r is the radius/distance
+          // Check the boundary of the square defined by radius r
+          for (let dx = -r; dx <= r; dx++) {
+              for (let dy = -r; dy <= r; dy++) {
+                  // Only check the cells on the square's perimeter for this radius
+                  if (Math.abs(dx) === r || Math.abs(dy) === r) {
+                      const x = startX + dx;
+                      const y = startY + dy;
+
+                      if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+                          const cellKey = `${x}_${GRID_SIZE - 1 - y}`;
+                          const cellData = dataJson[cellKey];
+
+                          // Check if cell exists and passes filters
+                          if (cellData && checkFilters(cellData, currentFilters, AGE_RANGES)) {
+                              return { x, y }; // Found the nearest valid cell
+                          }
+                      }
+                  }
+              }
+          }
+      }
+
+      return null; // No valid cell found within the search limit
+  }, []); // Dependency array is only needed if used in a component's body
+
   const handleCellSelect = useCallback((x, y) => {
     if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
+
+    // 1. Determine the target cell coordinates
+    let targetX = x;
+    let targetY = y;
+
     const flippedY = GRID_SIZE - 1 - y;
     const key = `${x}_${flippedY}`;
     const selectedData = dataJson[key];
-    if (!selectedData) return;
+    const isCursorCellValid = selectedData && checkFilters(selectedData, filters, AGE_RANGES);
 
-    // If the data doesn't pass the active filters, stop here.
-    const matchesFilters = checkFilters(selectedData, filters, AGE_RANGES);
-    if (!matchesFilters) return;
+    if (!isCursorCellValid) {
+        // 2. If the cursor cell is NOT valid, find the nearest valid one
+        const nearestCell = findNearestValidCell(x, y, filters);
 
-    if (x === selected.x && y === selected.y && dataJson[`${selected.x}_${GRID_SIZE - 1 - selected.y}`] === selectedData) return;
-    setSelected({ x, y });
-    const fileName = selectedData.file_name;
+        if (!nearestCell) {
+            // No nearby valid cell found, do nothing (i.e., stay on the current selection)
+            return;
+        }
+
+        // 3. Snap the selection to the nearest valid cell
+        targetX = nearestCell.x;
+        targetY = nearestCell.y;
+    }
+
+    // Now, retrieve the data for the *actual* target cell (which may have been snapped)
+    const targetFlippedY = GRID_SIZE - 1 - targetY;
+    const targetKey = `${targetX}_${targetFlippedY}`;
+    const finalSelectedData = dataJson[targetKey];
+
+    // Safety check (should always pass if logic is correct)
+    if (!finalSelectedData) return;
+
+    // Prevent unnecessary state updates if we snapped to the current selection
+    if (targetX === selected.x && targetY === selected.y) return;
+
+    // 4. Update the selection and play the audio
+    setSelected({ x: targetX, y: targetY });
+    const fileName = finalSelectedData.file_name;
     const audioPath = `audio_processed/${fileName}.wav`;
 
     const now = Date.now();
     if (now - lastPlayTimeRef.current < MIN_PLAY_INTERVAL_MS) {
-        // Skip playing audio if it's too soon
         return;
     }
 
     lastPlayTimeRef.current = now; // Update the last play time
     const newAudio = new Audio(audioPath);
     newAudio.play().catch(() => {});
-  }, [selected.x, selected.y]);
+  }, [selected.x, selected.y, filters, findNearestValidCell]);
 
   const handleCanvasMouseMove = useCallback((e) => {
     if (!isMouseDownRef.current) return;
