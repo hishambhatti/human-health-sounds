@@ -253,7 +253,7 @@ export default function FastVisualization({ handleClickAbout }) {
     canvas.width = viewWidth;
     canvas.height = viewHeight;
 
-    context.fillStyle = "#f4f3ef";
+    context.fillStyle = "#f4f3ef"; // Outside of grid is colored beige
     context.fillRect(0, 0, viewWidth, viewHeight);
 
     context.save();
@@ -296,12 +296,61 @@ export default function FastVisualization({ handleClickAbout }) {
 
         context.fillStyle = "#d7ecff";
         context.strokeStyle = "#5dade2";
-        context.lineWidth = 2;
+        context.lineWidth = 3.5;
 
-        context.fillRect(highlightDrawX, highlightDrawY, highlightSize, highlightSize);
+        //context.fillRect(highlightDrawX, highlightDrawY, highlightSize, highlightSize);
         context.strokeRect(highlightDrawX, highlightDrawY, highlightSize, highlightSize);
 
-        context.drawImage(image, highlightDrawX, highlightDrawY, highlightSize, highlightSize);
+        // params: image, highlightDrawX, highlightDrawY, highlightSize, highlightSize
+        function drawDarkened(image, x, y, size, gamma = 2.0) {
+          // create a temporary canvas same size as the area you want to draw
+          const tmp = document.createElement('canvas');
+          tmp.width = size;
+          tmp.height = size;
+          const tctx = tmp.getContext('2d');
+
+          // draw the image (scaled) onto the temp canvas
+          tctx.drawImage(image, 0, 0, size, size);
+
+          // read pixels for the area
+          const imgData = tctx.getImageData(0, 0, size, size);
+          const data = imgData.data;
+
+          // apply gamma to luminance and scale channels proportionally
+          // gamma > 1 darkens midtones (try 1.6 - 2.4 depending on how dark you want)
+          const invGamma = 1 / gamma; // we will use pow(br/255, gamma) below
+
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i], g = data[i + 1], b = data[i + 2];
+            // compute brightness (luminance)
+            const br = 0.299 * r + 0.587 * g + 0.114 * b; // 0..255
+
+            if (br === 0) { // black stays black
+              continue;
+            }
+
+            // new brightness after gamma: values near 255 remain near 255, mid grays become darker
+            const newBr = 255 * Math.pow(br / 255, gamma);
+
+            // ratio to scale RGB while preserving color/tone
+            const scale = newBr / br;
+
+            data[i]     = Math.max(0, Math.min(255, data[i] * scale));
+            data[i + 1] = Math.max(0, Math.min(255, data[i + 1] * scale));
+            data[i + 2] = Math.max(0, Math.min(255, data[i + 2] * scale));
+            // alpha (data[i+3]) unchanged
+          }
+
+          // put adjusted pixels back and draw onto main canvas
+          tctx.putImageData(imgData, 0, 0);
+          context.drawImage(tmp, x, y);
+        }
+
+        drawDarkened(image, highlightDrawX, highlightDrawY, highlightSize, 2.0);
+        //context.drawImage(image, highlightDrawX, highlightDrawY, highlightSize, highlightSize);
+
+        context.fillStyle = 'rgba(215, 236, 255, 0.4)';
+        context.fillRect(highlightDrawX, highlightDrawY, highlightSize, highlightSize);
       }
     }
   }, [transform, selected, isGridReady, images]);
