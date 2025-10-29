@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useLayoutEffect, useState, useRef, useCallback } from "react";
 import * as d3 from "d3";
 // NOTE: Make sure the path is correct in your environment
 import dataJson from "/Users/hishambhatti/Desktop/Projects/human-health-sounds/ca-cough-ony/vocalsound_processed_grid_index_p50.json"
@@ -94,57 +94,40 @@ export default function FastVisualization({ handleClickAbout }) {
 
   const [loadingProgress, setLoadingProgress] = useState(0);
 
+  // 🔑 FIX: Add state to track the actual canvas dimensions
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+
   // 🔑 FIX 1: Initialize transform to the absolute top-left state.
-  // We will correct it in useEffect.
   const [transform, setTransform] = useState({
     scale: MIN_SCALE,
     translateX: 0,
     translateY: 0,
   });
 
-
   // --- Centering Helper (Finds the translation for a cell to be centered on screen) ---
   const calculateCenterTransform = useCallback((scale, targetX, targetY) => {
-    if (!canvasRef.current) return { translateX: 0, translateY: 0 };
-
+    if (!canvasRef.current) {
+        console.log("DEBUG: calculateCenterTransform - Canvas ref not available. Returning 0, 0.");
+        return { translateX: 0, translateY: 0 };
+    }
+    // ... (rest of calculateCenterTransform is unchanged) ...
     const screenCenterX = canvasRef.current.clientWidth / 2;
     const screenCenterY = canvasRef.current.clientHeight / 2;
 
-    // Calculate the center of the target cell in the non-transformed grid space
+    console.log(`DEBUG: Center Calculation - Screen W: ${canvasRef.current.clientWidth}, Screen H: ${canvasRef.current.clientHeight}`);
+
     const cellCenterX = (targetX * (CELL_SIZE + CELL_GAP)) + CELL_SIZE / 2;
     const cellCenterY = (targetY * (CELL_SIZE + CELL_GAP)) + CELL_SIZE / 2;
 
-    // Calculate new translation to keep the *target cell* centered on the screen
     const newTranslateX = screenCenterX - (cellCenterX * scale);
     const newTranslateY = screenCenterY - (cellCenterY * scale);
+
+    console.log(`DEBUG: Center Calculation Result (Scale: ${scale}): TX=${newTranslateX.toFixed(2)}, TY=${newTranslateY.toFixed(2)}`);
 
     return { translateX: newTranslateX, translateY: newTranslateY };
   }, []);
 
-  // 🔑 FIX 2: Apply the dynamic center position immediately after canvas and images are ready, only once.
-  useEffect(() => {
-    // Check if images are loaded, canvas ref is available, and centering hasn't been applied yet.
-    if (canvasRef.current && Object.keys(images).length > 0 && !initialCenterApplied) {
-
-        // This is the desired final state of the "zoom-out and center" action
-        const centerCellIndex = GRID_SIZE / 2;
-
-        const { translateX, translateY } = calculateCenterTransform(MIN_SCALE, centerCellIndex, centerCellIndex);
-
-        // Set the transform immediately to this final, centered state
-        setTransform({
-            scale: MIN_SCALE,
-            translateX: translateX,
-            translateY: translateY,
-        });
-
-        // Ensure this logic only runs once on load
-        setInitialCenterApplied(true);
-    }
-  }, [images, calculateCenterTransform, initialCenterApplied]);
-
-
-  // 1. IMAGE PRE-LOADING EFFECT (Modified to remove redundant setTransform)
+  // 1. IMAGE PRE-LOADING EFFECT (Asynchronous task)
   useEffect(() => {
     const allFileNames = Object.keys(dataJson).map(key => dataJson[key].file_name);
     let loadedImages = {};
@@ -165,7 +148,7 @@ export default function FastVisualization({ handleClickAbout }) {
       const checkLoadComplete = () => {
         loadedCount++;
         const newProgress = Math.min(100, Math.round((loadedCount / totalToLoad) * 100)); // Calculate progress
-        setLoadingProgress(newProgress); // 🔑 Update loading progress
+        setLoadingProgress(newProgress); // Update loading progress
 
         if (loadedCount === totalToLoad) {
           setImages(loadedImages);
@@ -186,10 +169,52 @@ export default function FastVisualization({ handleClickAbout }) {
       img.src = imagePath;
     });
 
-    // Removed setTransform here
-  }, []);
+  }, []); // Dependencies are now minimal
 
-  // 2. OFF-SCREEN GRID COMPOSITING EFFECT (Unchanged)
+  useLayoutEffect(() => {
+      // Check if the ref is available
+      if (canvasRef.current) {
+          const newWidth = canvasRef.current.clientWidth;
+          const newHeight = canvasRef.current.clientHeight;
+
+          // Only update if dimensions are non-zero AND if they are different from current state.
+          // This prevents infinite loops if the browser reports 0,0 multiple times.
+          if (newWidth > 0 && newHeight > 0 && (newWidth !== canvasSize.width || newHeight !== canvasSize.height)) {
+              setCanvasSize({
+                  width: newWidth,
+                  height: newHeight,
+              });
+              console.log(`DEBUG: Canvas Size Measured: W: ${newWidth}, H: ${newHeight}`);
+          }
+      }
+  }, [canvasSize.width, canvasSize.height]); // No dependencies means it runs after every render (typical use for measuring layout)
+
+  // 3. 🔑 FIX: Dedicated useLayoutEffect for SYNCHRONOUS Centering (runs when images AND size are ready)
+  // This logic is mostly correct, just needs the new canvasSize dependency fix.
+  useLayoutEffect(() => {
+    if (Object.keys(images).length > 0 && !initialCenterApplied && canvasSize.width > 0) {
+
+        console.log("DEBUG: useLayoutEffect: Initiating Initial Center Snap with FINAL dimensions.");
+
+        const centerCellIndex = GRID_SIZE / 2;
+
+        const { translateX, translateY } = calculateCenterTransform(MIN_SCALE, centerCellIndex, centerCellIndex);
+
+        setTransform({
+            scale: MIN_SCALE,
+            translateX: translateX,
+            translateY: translateY,
+        });
+
+        console.log(`DEBUG: Initial Transform SET (FINAL): Scale=${MIN_SCALE}, TX=${translateX.toFixed(2)}, TY=${translateY.toFixed(2)}`);
+
+        // Now that centering is applied, we mark it as done.
+        setInitialCenterApplied(true);
+    }
+  }, [images, calculateCenterTransform, initialCenterApplied, canvasSize.width, canvasSize.height]); // Use both width/height as deps
+
+
+  // 4. OFF-SCREEN GRID COMPOSITING EFFECT (Unchanged)
   const compositeGrid = useCallback((currentFilters) => {
     if (Object.keys(images).length === 0) return;
 
@@ -223,7 +248,7 @@ export default function FastVisualization({ handleClickAbout }) {
 
     preRenderedGridRef.current = offscreenCanvas;
     setIsGridReady(true);
-  }, [images, dataJson]);
+  }, [images]);
 
   useEffect(() => {
     if (Object.keys(images).length > 0) {
@@ -232,7 +257,7 @@ export default function FastVisualization({ handleClickAbout }) {
     }
   }, [filters, images, compositeGrid]);
 
-  // 3. MAIN CANVAS RENDER EFFECT (Unchanged)
+  // 5. MAIN CANVAS RENDER EFFECT (Log added)
   useEffect(() => {
     const canvas = canvasRef.current;
     const preRenderedGrid = preRenderedGridRef.current;
@@ -241,6 +266,9 @@ export default function FastVisualization({ handleClickAbout }) {
     const context = canvas.getContext("2d");
     const { scale, translateX, translateY } = transform;
     const { x: selX, y: selY } = selected;
+
+    // ADDED LOG: Log the values used for drawing
+    console.log(`RENDER DRAW: Scale=${scale.toFixed(2)}, TX=${translateX.toFixed(2)}, TY=${translateY.toFixed(2)}`);
 
     const viewWidth = canvas.clientWidth;
     const viewHeight = canvas.clientHeight;
@@ -291,9 +319,9 @@ export default function FastVisualization({ handleClickAbout }) {
         context.drawImage(image, highlightDrawX, highlightDrawY, highlightSize, highlightSize);
       }
     }
-  }, [transform, selected, isGridReady, dataJson, images]);
+  }, [transform, selected, isGridReady, images]);
 
-  // 4. INTERACTION LOGIC (Unchanged)
+  // 6. INTERACTION LOGIC (Unchanged)
   const getCellCoordinates = useCallback((e) => {
     const rect = canvasRef.current.getBoundingClientRect();
     const clientX = e.clientX;
@@ -354,7 +382,7 @@ export default function FastVisualization({ handleClickAbout }) {
       return () => window.removeEventListener('mouseup', handleMouseUp);
   }, [handleMouseUp]);
 
-  // 5. CORE ZOOM HANDLER (Fixed-Position Zoom)
+  // 7. CORE ZOOM HANDLER (Fixed-Position Zoom)
 
   // PHASE 2: Smoothly animates translation towards the grid center
   const animateToCenter = useCallback(() => {
@@ -426,15 +454,18 @@ export default function FastVisualization({ handleClickAbout }) {
       const newTranslateX = PX - (cellCenterX * newScale);
       const newTranslateY = PY - (cellCenterY * newScale);
 
+      // ADDED LOG: Track transform changes from user input (zoom)
+      console.log(`APPLY ZOOM: Direction=${direction}. New Transform: Scale=${newScale.toFixed(2)}, TX=${newTranslateX.toFixed(2)}, TY=${newTranslateY.toFixed(2)}`);
+
       return {
         scale: newScale,
         translateX: newTranslateX,
         translateY: newTranslateY,
       };
     });
-  }, [selected.x, selected.y, calculateCenterTransform, animateToCenter]);
+  }, [selected.x, selected.y, animateToCenter]);
 
-  // 6. CONTINUOUS ZOOM IMPLEMENTATION (Unchanged)
+  // 8. CONTINUOUS ZOOM IMPLEMENTATION (Unchanged)
   const startZoom = useCallback((direction) => {
       if (zoomIntervalRef.current) clearInterval(zoomIntervalRef.current);
       zoomIntervalRef.current = setInterval(() => {
@@ -452,7 +483,7 @@ export default function FastVisualization({ handleClickAbout }) {
   const handleZoomInStart = () => startZoom('in');
   const handleZoomOutStart = () => startZoom('out');
 
-  // 7. MOUSE WHEEL ZOOM IMPLEMENTATION (Unchanged)
+  // 9. MOUSE WHEEL ZOOM IMPLEMENTATION (Unchanged)
   const handleWheel = useCallback((e) => {
     //e.preventDefault();
     if (!isGridReady) return;
@@ -490,22 +521,18 @@ export default function FastVisualization({ handleClickAbout }) {
           onMouseMove={handleCanvasMouseMove}
           onWheel={handleWheel}
           style={{
-            // Only display the canvas once the images are ready and the initial center is applied
-            display: (isGridReady && initialCenterApplied) ? 'block' : 'none',
+            // 🔑 FIX: Use opacity instead of display: 'none' to allow the browser to measure it.
+            opacity: (isGridReady && initialCenterApplied) ? 1 : 0,
+            transition: 'opacity 0.3s ease-in', // optional fade in effect
             cursor: isMouseDownRef.current ? 'grabbing' : 'pointer',
             width: '100%',
             height: '100%',
           }}
         ></canvas>
-        {/* 🔑 Replaced simple loading div with new ProgressBar component */}
+        {/* We still show the progress bar if not all components are ready */}
         {(!isGridReady || !initialCenterApplied) && (
             <ProgressBar progress={loadingProgress} />
         )}
-        {/* {(!isGridReady || !initialCenterApplied) && (
-            <div className="absolute inset-0 flex items-center justify-center text-xl bg-[#f4f3ef]">
-              Loading {GRID_SIZE * GRID_SIZE} spectrograms...
-            </div>
-        )} */}
 
         {/* Metadata display: (Unchanged) */}
         {selectedData && isGridReady && (
