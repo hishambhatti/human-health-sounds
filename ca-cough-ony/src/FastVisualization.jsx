@@ -44,7 +44,8 @@ const AGE_RANGES = [
 const GRID_SIZE = 144
 const CELL_SIZE = 5
 const CELL_GAP = 0
-const MIN_SCALE = 0.5; // The scale we want for the initial view
+const INITIAL_SCALE = 2.0;
+const MIN_SCALE = 0.9; // The scale we want for the initial view
 const MAX_SCALE = 8.0;
 const ZOOM_FACTOR = 1.02;
 const WHEEL_ZOOM_FACTOR = 1.05;
@@ -90,7 +91,7 @@ export default function FastVisualization({ handleClickAbout }) {
 
   // Add a useRef to track the last play time
   const lastPlayTimeRef = useRef(0);
-  const MIN_PLAY_INTERVAL_MS = 100; // e.g., 100 milliseconds
+  const MIN_PLAY_INTERVAL_MS = 150; // e.g., 100 milliseconds
 
   const [loadingProgress, setLoadingProgress] = useState(0);
 
@@ -198,10 +199,10 @@ export default function FastVisualization({ handleClickAbout }) {
 
         const centerCellIndex = GRID_SIZE / 2;
 
-        const { translateX, translateY } = calculateCenterTransform(MIN_SCALE, centerCellIndex, centerCellIndex);
+        const { translateX, translateY } = calculateCenterTransform(INITIAL_SCALE, centerCellIndex, centerCellIndex);
 
         setTransform({
-            scale: MIN_SCALE,
+            scale: INITIAL_SCALE,
             translateX: translateX,
             translateY: translateY,
         });
@@ -299,7 +300,7 @@ export default function FastVisualization({ handleClickAbout }) {
 
       const highlightSize = CELL_SIZE * 8;
 
-      setMetadataPos({ left: screenX + (CELL_SIZE * scale) / 2, top: screenY });
+      setMetadataPos({ left: screenX + (CELL_SIZE * scale) / 2, top: screenY + (CELL_SIZE * 5) });
 
       if (screenX + highlightSize > 0 && screenY + highlightSize > 0 &&
           screenX < viewWidth && screenY < viewHeight) {
