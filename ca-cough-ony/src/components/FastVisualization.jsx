@@ -1,8 +1,8 @@
 import React, { useEffect, useLayoutEffect, useState, useRef, useCallback } from "react";
 import dataJson from "/Users/hishambhatti/Desktop/Projects/human-health-sounds/ca-cough-ony/vocalsound_processed_grid_index_p50.json"
-import IconButton from "./components/IconButton";
-import SearchBar from "./components/SearchBar";
-import ProgressBar from "./components/ProgressBar";
+import IconButton from "./IconButton";
+import SearchBar from "./SearchBar";
+import ProgressBar from "./ProgressBar";
 
 // --- CONSTANTS & HELPER FUNCTIONS (Unchanged) ---
 const SOUND_TYPE_STYLES = {

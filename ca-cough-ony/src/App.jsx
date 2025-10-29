@@ -1,9 +1,8 @@
 import React from "react"
-import Landing from "./Landing"
+import Landing from "./components/Landing"
 import { useState } from "react"
-import About from "./About"
-import Visualization from "./Visualization"
-import FastVisualization from "./FastVisualization"
+import About from "./components/About"
+import FastVisualization from "./components/FastVisualization"
 
 export default function App() {
 
