@@ -17,6 +17,7 @@ const SOUND_TYPE_STYLES = {
 const GENDER_COLORS = {
   Male: "#3498DB",
   Female: "#E84393",
+  Other: "#1ABC9C",
 };
 
 const AGE_COLORS = (age) => {
