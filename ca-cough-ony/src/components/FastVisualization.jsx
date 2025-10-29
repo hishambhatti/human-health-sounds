@@ -96,6 +96,9 @@ export default function FastVisualization({ handleClickAbout }) {
 
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
+  const trailHighlightsRef = useRef([]);
+  const TRAIL_FADE_MS = 1000; // 1 second fade duration
+
   const [transform, setTransform] = useState({
     scale: MIN_SCALE,
     translateX: 0,
@@ -249,110 +252,146 @@ export default function FastVisualization({ handleClickAbout }) {
     const { x: selX, y: selY } = selected;
 
     const viewWidth = canvas.clientWidth;
-    const viewHeight = canvas.clientHeight;
-    canvas.width = viewWidth;
-    canvas.height = viewHeight;
+    const viewHeight = canvas.clientHeight
+    let animationFrameId;
 
-    context.fillStyle = "#f4f3ef"; // Outside of grid is colored beige
-    context.fillRect(0, 0, viewWidth, viewHeight);
+    // params: image, highlightDrawX, highlightDrawY, highlightSize, highlightSize
+    function drawDarkened(image, x, y, size, gamma = 2.0) {
+      // create a temporary canvas same size as the area you want to draw
+      const tmp = document.createElement('canvas');
+      tmp.width = size;
+      tmp.height = size;
+      const tctx = tmp.getContext('2d');
 
-    context.save();
-    context.translate(translateX, translateY);
-    context.scale(scale, scale);
-    context.drawImage(preRenderedGrid, 0, 0);
-    context.restore();
+      // draw the image (scaled) onto the temp canvas
+      tctx.drawImage(image, 0, 0, size, size);
 
-    // Draw the Selection Highlight
-    const key = `${selX}_${GRID_SIZE - 1 - selY}`;
-    const selectedData = dataJson[key];
-    const fileName = selectedData?.file_name;
-    const image = images[fileName];
+      // read pixels for the area
+      const imgData = tctx.getImageData(0, 0, size, size);
+      const data = imgData.data;
 
-    if (image) {
-      const cellDrawX = selX * (CELL_SIZE + CELL_GAP);
-      const cellDrawY = selY * (CELL_SIZE + CELL_GAP);
+      // apply gamma to luminance and scale channels proportionally
+      // gamma > 1 darkens midtones (try 1.6 - 2.4 depending on how dark you want)
+      const invGamma = 1 / gamma; // we will use pow(br/255, gamma) below
 
-      const screenX = cellDrawX * scale + translateX;
-      const screenY = cellDrawY * scale + translateY;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        // compute brightness (luminance)
+        const br = 0.299 * r + 0.587 * g + 0.114 * b; // 0..255
 
-      const highlightSize = CELL_SIZE * 8;
+        if (br === 0) { // black stays black
+          continue;
+        }
 
-      const highlightOffset = (highlightSize - CELL_SIZE * scale) / 2;
+        // new brightness after gamma: values near 255 remain near 255, mid grays become darker
+        const newBr = 255 * Math.pow(br / 255, gamma);
 
-      let highlightDrawX = screenX - highlightOffset;
+        // ratio to scale RGB while preserving color/tone
+        const scale = newBr / br;
 
-      // Note: CELL_SIZE * CELL_SIZE is a constant to make the metadata the right height above the selection
-      let highlightDrawY = screenY - highlightOffset + CELL_SIZE * CELL_SIZE;
+        data[i]     = Math.max(0, Math.min(255, data[i] * scale));
+        data[i + 1] = Math.max(0, Math.min(255, data[i + 1] * scale));
+        data[i + 2] = Math.max(0, Math.min(255, data[i + 2] * scale));
+        // alpha (data[i+3]) unchanged
+      }
 
-      setMetadataPos({ left: screenX + (CELL_SIZE * scale) / 2, top: highlightDrawY});
+      // put adjusted pixels back and draw onto main canvas
+      tctx.putImageData(imgData, 0, 0);
+      context.drawImage(tmp, x, y);
+    }
 
-      if (screenX + highlightSize > 0 && screenY + highlightSize > 0 &&
-          screenX < viewWidth && screenY < viewHeight) {
+    const draw = () => {
+      canvas.width = viewWidth;
+      canvas.height = viewHeight;
+
+      context.fillStyle = "#f4f3ef"; // Outside of grid is colored beige
+      context.fillRect(0, 0, viewWidth, viewHeight);
+
+      context.save();
+      context.translate(translateX, translateY);
+      context.scale(scale, scale);
+      context.drawImage(preRenderedGrid, 0, 0);
+      context.restore();
+
+      const now = Date.now();
+      let shouldContinueAnimating = false;
+
+      const trails = trailHighlightsRef.current.filter(
+      t => now - t.timestamp < TRAIL_FADE_MS
+    );
+      trailHighlightsRef.current = trails; // cleanup expired
+
+      // --- 2. Draw Trail Highlights (NEW) ---
+      // Draw trails FIRST (below selection)
+    trails.forEach(item => {
+      const timePassed = now - item.timestamp;
+      const alpha = 1 - (timePassed / TRAIL_FADE_MS);
+      const cellDrawX = item.x * (CELL_SIZE + CELL_GAP);
+      const cellDrawY = item.y * (CELL_SIZE + CELL_GAP);
+      const screenX = cellDrawX * transform.scale + transform.translateX;
+      const screenY = cellDrawY * transform.scale + transform.translateY;
+      const size = CELL_SIZE * transform.scale;
+      context.strokeStyle = `rgba(93, 173, 226, ${alpha})`;
+      context.lineWidth = 1.5;
+      context.strokeRect(screenX, screenY, size, size);
+    });
+
+      // Draw the Selection Highlight
+      const key = `${selX}_${GRID_SIZE - 1 - selY}`;
+      const selectedData = dataJson[key];
+      const fileName = selectedData?.file_name;
+      const image = images[fileName];
+
+      if (image) {
+        const cellDrawX = selX * (CELL_SIZE + CELL_GAP);
+        const cellDrawY = selY * (CELL_SIZE + CELL_GAP);
+
+        const screenX = cellDrawX * scale + translateX;
+        const screenY = cellDrawY * scale + translateY;
+
+        const highlightSize = CELL_SIZE * 8;
 
         const highlightOffset = (highlightSize - CELL_SIZE * scale) / 2;
 
-        highlightDrawX = screenX - highlightOffset;
-        highlightDrawY = screenY - highlightOffset;
+        let highlightDrawX = screenX - highlightOffset;
 
-        context.fillStyle = "#d7ecff";
-        context.strokeStyle = "#5dade2";
-        context.lineWidth = 3.5;
+        // Note: CELL_SIZE * CELL_SIZE is a constant to make the metadata the right height above the selection
+        let highlightDrawY = screenY - highlightOffset + CELL_SIZE * CELL_SIZE;
 
-        //context.fillRect(highlightDrawX, highlightDrawY, highlightSize, highlightSize);
-        context.strokeRect(highlightDrawX, highlightDrawY, highlightSize, highlightSize);
+        setMetadataPos({ left: screenX + (CELL_SIZE * scale) / 2, top: highlightDrawY});
 
-        // params: image, highlightDrawX, highlightDrawY, highlightSize, highlightSize
-        function drawDarkened(image, x, y, size, gamma = 2.0) {
-          // create a temporary canvas same size as the area you want to draw
-          const tmp = document.createElement('canvas');
-          tmp.width = size;
-          tmp.height = size;
-          const tctx = tmp.getContext('2d');
+        if (screenX + highlightSize > 0 && screenY + highlightSize > 0 &&
+            screenX < viewWidth && screenY < viewHeight) {
 
-          // draw the image (scaled) onto the temp canvas
-          tctx.drawImage(image, 0, 0, size, size);
+          const highlightOffset = (highlightSize - CELL_SIZE * scale) / 2;
 
-          // read pixels for the area
-          const imgData = tctx.getImageData(0, 0, size, size);
-          const data = imgData.data;
+          highlightDrawX = screenX - highlightOffset;
+          highlightDrawY = screenY - highlightOffset;
 
-          // apply gamma to luminance and scale channels proportionally
-          // gamma > 1 darkens midtones (try 1.6 - 2.4 depending on how dark you want)
-          const invGamma = 1 / gamma; // we will use pow(br/255, gamma) below
+          context.fillStyle = "#d7ecff";
+          context.strokeStyle = "#5dade2";
+          context.lineWidth = 3.5;
 
-          for (let i = 0; i < data.length; i += 4) {
-            const r = data[i], g = data[i + 1], b = data[i + 2];
-            // compute brightness (luminance)
-            const br = 0.299 * r + 0.587 * g + 0.114 * b; // 0..255
+          //context.fillRect(highlightDrawX, highlightDrawY, highlightSize, highlightSize);
+          context.strokeRect(highlightDrawX, highlightDrawY, highlightSize, highlightSize);
 
-            if (br === 0) { // black stays black
-              continue;
-            }
+          drawDarkened(image, highlightDrawX, highlightDrawY, highlightSize, 2.0);
+          //context.drawImage(image, highlightDrawX, highlightDrawY, highlightSize, highlightSize);
 
-            // new brightness after gamma: values near 255 remain near 255, mid grays become darker
-            const newBr = 255 * Math.pow(br / 255, gamma);
-
-            // ratio to scale RGB while preserving color/tone
-            const scale = newBr / br;
-
-            data[i]     = Math.max(0, Math.min(255, data[i] * scale));
-            data[i + 1] = Math.max(0, Math.min(255, data[i + 1] * scale));
-            data[i + 2] = Math.max(0, Math.min(255, data[i + 2] * scale));
-            // alpha (data[i+3]) unchanged
-          }
-
-          // put adjusted pixels back and draw onto main canvas
-          tctx.putImageData(imgData, 0, 0);
-          context.drawImage(tmp, x, y);
+          context.fillStyle = 'rgba(215, 236, 255, 0.4)';
+          context.fillRect(highlightDrawX, highlightDrawY, highlightSize, highlightSize);
         }
-
-        drawDarkened(image, highlightDrawX, highlightDrawY, highlightSize, 2.0);
-        //context.drawImage(image, highlightDrawX, highlightDrawY, highlightSize, highlightSize);
-
-        context.fillStyle = 'rgba(215, 236, 255, 0.4)';
-        context.fillRect(highlightDrawX, highlightDrawY, highlightSize, highlightSize);
       }
-    }
+
+      animationFrameId = requestAnimationFrame(draw);
+    };
+
+    // First call to start the drawing/animation loop
+    draw();
+
+    // Cleanup function to stop the animation when component unmounts or deps change
+    return () => cancelAnimationFrame(animationFrameId);
+
   }, [transform, selected, isGridReady, images]);
 
   const getCellCoordinates = useCallback((e) => {
@@ -450,6 +489,16 @@ export default function FastVisualization({ handleClickAbout }) {
     const now = Date.now();
     if (now - lastPlayTimeRef.current < MIN_PLAY_INTERVAL_MS) {
         return;
+    }
+
+    // Only add the *old* selection to the trail if the new audio *will* play.
+    const oldKey = `${selected.x}_${GRID_SIZE - 1 - selected.y}`;
+    if (dataJson[oldKey]) {
+        trailHighlightsRef.current.push({
+        x: selected.x,
+        y: selected.y,
+        timestamp: now
+      });
     }
 
     lastPlayTimeRef.current = now; // Update the last play time
