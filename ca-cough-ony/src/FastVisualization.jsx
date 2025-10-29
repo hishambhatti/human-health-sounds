@@ -325,6 +325,11 @@ export default function FastVisualization({ handleClickAbout }) {
     const key = `${x}_${flippedY}`;
     const selectedData = dataJson[key];
     if (!selectedData) return;
+
+    // If the data doesn't pass the active filters, stop here.
+    const matchesFilters = checkFilters(selectedData, filters, AGE_RANGES);
+    if (!matchesFilters) return;
+
     if (x === selected.x && y === selected.y && dataJson[`${selected.x}_${GRID_SIZE - 1 - selected.y}`] === selectedData) return;
     setSelected({ x, y });
     const fileName = selectedData.file_name;
