@@ -12,7 +12,7 @@ export default function About({ handleClickExplore }) {
       {/* Image (placeholder for video) */}
       <div className='w-full max-w-3xl border border-gray-300 shadow-sm'>
         <img
-          src='/about_temp.png'
+          src='/cover.png'
           alt='Spectrogram display'
           className='w-full h-auto object-cover'
         />
