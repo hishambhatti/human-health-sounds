@@ -98,6 +98,7 @@ export default function FastVisualization({ handleClickAbout }) {
   const [initialCenterApplied, setInitialCenterApplied] = useState(false);
   const zoomIntervalRef = useRef(null);
   const smoothCenterTimeoutRef = useRef(null);
+  const panAnimationRef = useRef(null); // <-- NEW REF FOR CONTINUOUS PAN
 
   // Track last play time for audio buffer
   const lastPlayTimeRef = useRef(0);
@@ -116,6 +117,58 @@ export default function FastVisualization({ handleClickAbout }) {
     translateX: 0,
     translateY: 0,
   });
+
+  const latestStateRef = useRef({ selected: selected, transform: transform })
+
+  // --- New Helper Function for Auto-Panning Adjustment ---
+  const calculatePanAdjustments = useCallback((currentTransform, selectedX, selectedY) => {
+    if (!canvasRef.current) return { deltaX: 0, deltaY: 0 };
+
+    const { scale: currentScale, translateX, translateY } = currentTransform;
+
+    const viewWidth = canvasRef.current.clientWidth;
+    const viewHeight = canvasRef.current.clientHeight;
+
+    // --- Adjust MAX_PAN_SPEED here for faster panning (e.g., 4.0 or more) ---
+    const MAX_PAN_SPEED = 5.0; // Increased speed for responsiveness
+    const edgeThresholdX = viewWidth * 0.25;
+    const edgeThresholdY = viewHeight * 0.25;
+
+    // Calculate selected cell's center in *screen* coordinates
+    const cellCenterX_grid = (selectedX * (CELL_SIZE + CELL_GAP)) + CELL_SIZE / 2;
+    const cellCenterY_grid = (selectedY * (CELL_SIZE + CELL_GAP)) + CELL_GAP / 2;
+
+    const currentScreenX = cellCenterX_grid * currentScale + translateX;
+    const currentScreenY = cellCenterY_grid * currentScale + translateY;
+
+    let deltaX = 0;
+    let deltaY = 0;
+
+    // 1. Check Horizontal Edges
+    if (currentScreenX < edgeThresholdX) {
+      // Too close to the LEFT edge - calculate pan amount based on proximity to edge
+      // Pan to the right (positive deltaX)
+      const proximity = edgeThresholdX - currentScreenX;
+      deltaX = MAX_PAN_SPEED * (proximity / edgeThresholdX);
+    } else if (currentScreenX > viewWidth - edgeThresholdX) {
+      // Too close to the RIGHT edge - Pan to the left (negative deltaX)
+      const proximity = currentScreenX - (viewWidth - edgeThresholdX);
+      deltaX = -MAX_PAN_SPEED * (proximity / edgeThresholdX);
+    }
+
+    // 2. Check Vertical Edges
+    if (currentScreenY < edgeThresholdY) {
+      // Too close to the TOP edge - Pan down (positive deltaY)
+      const proximity = edgeThresholdY - currentScreenY;
+      deltaY = MAX_PAN_SPEED * (proximity / edgeThresholdY);
+    } else if (currentScreenY > viewHeight - edgeThresholdY) {
+      // Too close to the BOTTOM edge - Pan up (negative deltaY)
+      const proximity = currentScreenY - (viewHeight - edgeThresholdY);
+      deltaY = -MAX_PAN_SPEED * (proximity / edgeThresholdY);
+    }
+
+    return { deltaX, deltaY };
+  }, []);
 
   // --- Centering Helper (Finds the translation for a cell to be centered on screen) ---
   const calculateCenterTransform = useCallback((scale, targetX, targetY) => {
@@ -447,7 +500,7 @@ export default function FastVisualization({ handleClickAbout }) {
     // Cleanup function to stop the animation when component unmounts or deps change
     return () => cancelAnimationFrame(animationFrameId);
 
-  }, [transform, selected, isGridReady, images]);
+  }, [transform, selected, isGridReady, images, colorMode]);
 
   const getCellCoordinates = useCallback((e) => {
     const rect = canvasRef.current.getBoundingClientRect();
@@ -499,6 +552,54 @@ export default function FastVisualization({ handleClickAbout }) {
       return null; // No valid cell found within the search limit
   }, []); // Dependency array is only needed if used in a component's body
 
+  // --- New Animation Loop for Continuous Pan during Selection ---
+  const animateContinuousPan = useCallback(() => {
+    // 🛑 FIX 1: Always check for mouse down and access latest state from ref
+    if (!isMouseDownRef.current) {
+        panAnimationRef.current = null;
+        return;
+    }
+
+    const { selected, transform } = latestStateRef.current;
+
+    // 2. Calculate the pan adjustments
+    const { deltaX, deltaY } = calculatePanAdjustments(
+      transform, // Pass the current transform object
+      selected.x,
+      selected.y
+    );
+
+    if (deltaX !== 0 || deltaY !== 0) {
+        setTransform(prevTransform => {
+            const newTransform = {
+            ...prevTransform,
+            // Apply the delta for a smooth pan
+            translateX: prevTransform.translateX + deltaX,
+            translateY: prevTransform.translateY + deltaY,
+            };
+
+            // 🛑 FIX 3: Update the transform ref here for the next frame
+            latestStateRef.current.transform = newTransform;
+
+            return newTransform;
+        });
+        // Request next frame to continue the pan
+        panAnimationRef.current = requestAnimationFrame(animateContinuousPan);
+    } else {
+        // Stop the loop if the selection is no longer near an edge
+        panAnimationRef.current = null;
+    }
+
+  }, [calculatePanAdjustments]);
+
+  const startContinuousPan = useCallback(() => {
+    // Only start if the mouse is down and the animation is not already running
+    if (isMouseDownRef.current && panAnimationRef.current === null) {
+        // 🛑 NEW: Start the loop
+        panAnimationRef.current = requestAnimationFrame(animateContinuousPan);
+    }
+  }, [animateContinuousPan]);
+
   const handleCellSelect = useCallback((x, y) => {
     if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
 
@@ -538,29 +639,35 @@ export default function FastVisualization({ handleClickAbout }) {
 
     // 4. Update the selection and play the audio
     setSelected({ x: targetX, y: targetY });
+
+    // 🛑 FIX 4: Update the selected ref here (right after setSelected)
+    latestStateRef.current.selected = { x: targetX, y: targetY };
+
+
     const fileName = finalSelectedData.file_name;
     const audioPath = `audio_processed/${fileName}.wav`;
     //const audioPath = `audio_processed_mp3/${fileName}.mp3`;
 
     const now = Date.now();
-    if (now - lastPlayTimeRef.current < MIN_PLAY_INTERVAL_MS) {
-        return;
+    if (now - lastPlayTimeRef.current >= MIN_PLAY_INTERVAL_MS) {
+      // Only add the *old* selection to the trail if the new audio *will* play.
+      const oldKey = `${selected.x}_${GRID_SIZE - 1 - selected.y}`;
+      if (dataJson[oldKey]) {
+          trailHighlightsRef.current.push({
+          x: selected.x,
+          y: selected.y,
+          timestamp: now
+        });
+      }
+
+      lastPlayTimeRef.current = now; // Update the last play time
+      const newAudio = new Audio(audioPath);
+      newAudio.play().catch(() => {});
     }
 
-    // Only add the *old* selection to the trail if the new audio *will* play.
-    const oldKey = `${selected.x}_${GRID_SIZE - 1 - selected.y}`;
-    if (dataJson[oldKey]) {
-        trailHighlightsRef.current.push({
-        x: selected.x,
-        y: selected.y,
-        timestamp: now
-      });
-    }
+    startContinuousPan();
 
-    lastPlayTimeRef.current = now; // Update the last play time
-    const newAudio = new Audio(audioPath);
-    newAudio.play().catch(() => {});
-  }, [selected.x, selected.y, filters, findNearestValidCell]);
+  }, [selected.x, selected.y, filters, findNearestValidCell, startContinuousPan]);
 
   const handleCanvasMouseMove = useCallback((e) => {
     if (!isMouseDownRef.current) return;
@@ -575,13 +682,17 @@ export default function FastVisualization({ handleClickAbout }) {
 
   const handleMouseUp = useCallback(() => {
     isMouseDownRef.current = false;
+
+    if (panAnimationRef.current) {
+        cancelAnimationFrame(panAnimationRef.current);
+        panAnimationRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
       window.addEventListener('mouseup', handleMouseUp);
       return () => window.removeEventListener('mouseup', handleMouseUp);
   }, [handleMouseUp]);
-
 
   const animateToCenter = useCallback(() => {
     // Target is the grid center at MIN_SCALE
@@ -687,11 +798,14 @@ export default function FastVisualization({ handleClickAbout }) {
 
   useEffect(() => {
     window.addEventListener('mouseup', stopZoom);
+    window.addEventListener('mouseup', handleMouseUp);
     return () => {
         window.removeEventListener('mouseup', stopZoom);
+        window.removeEventListener('mouseup', handleMouseUp);
         if (smoothCenterTimeoutRef.current) clearTimeout(smoothCenterTimeoutRef.current);
+        if (panAnimationRef.current) cancelAnimationFrame(panAnimationRef.current);
     }
-  }, [stopZoom]);
+  }, [stopZoom, handleMouseUp]);
 
   const key = `${selected.x}_${GRID_SIZE - 1 - selected.y}`;
   const selectedData = dataJson[key];
