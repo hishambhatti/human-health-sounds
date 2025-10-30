@@ -38,9 +38,12 @@ human-health-sounds/
 To build the backend Python, first create a virtual environment and install the required dependencies.
 
 Some commands to create a virtual environment
-```python3 -m venv .venv```
-```source .venv/bin/activate```
-```pip install -r requirements.txt```
+
+```
+python3 -m venv .venv source 
+.venv/bin/activate
+pip install -r requirements.txt
+```
 
 After installing dependencies, run the following notebooks *in order*, modifying the folder name for audio data:
 
