@@ -40,6 +40,15 @@ const AGE_RANGES = [
   { label: "65+", min: 65, max: Infinity },
 ];
 
+const AGE_RANGE_TO_COLOR = {
+  "18-24": "#2ECC71",
+  "25–34": "#F1C40F",
+  "35–44": "#E67E22",
+  "45–54": "#E74C3C",
+  "55–64":"#9B59B6",
+  "65+": "#9B59B6"
+}
+
 const GRID_SIZE = 144
 const CELL_SIZE = 8
 const CELL_GAP = 0
@@ -96,6 +105,8 @@ export default function FastVisualization({ handleClickAbout }) {
 
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
+  const [colorMode, setColorMode] = useState("None"); // "None", "Age", "Gender", "Sound Type"
+
   const trailHighlightsRef = useRef([]);
   const TRAIL_FADE_MS = 1000; // 1 second fade duration
 
@@ -120,6 +131,19 @@ export default function FastVisualization({ handleClickAbout }) {
 
     return { translateX: newTranslateX, translateY: newTranslateY };
   }, []);
+
+  function darkenColor(hex, amount = 0.25) {
+    const num = parseInt(hex.replace("#", ""), 16);
+    let r = (num >> 16) & 255;
+    let g = (num >> 8) & 255;
+    let b = num & 255;
+
+    r = Math.max(0, Math.min(255, r * (1 - amount)));
+    g = Math.max(0, Math.min(255, g * (1 - amount)));
+    b = Math.max(0, Math.min(255, b * (1 - amount)));
+
+    return `rgb(${r}, ${g}, ${b})`;
+  }
 
   // 1. IMAGE PRE-LOADING EFFECT (Asynchronous task)
   useEffect(() => {
@@ -225,6 +249,23 @@ export default function FastVisualization({ handleClickAbout }) {
 
       if (matches && image) {
         context.drawImage(image, drawX, drawY, CELL_SIZE, CELL_SIZE);
+
+        // === NEW COLOR OVERLAY SECTION ===
+        let overlayColor = null;
+        if (colorMode === "Age") overlayColor = AGE_COLORS(data.age);
+        else if (colorMode === "Gender") overlayColor = GENDER_COLORS[data.gender];
+        else if (colorMode === "Sound Type")
+          overlayColor = SOUND_TYPE_STYLES[data.sound_type]?.color;
+
+        if (overlayColor) {
+          context.fillStyle = overlayColor + "33"; // add transparency (hex 88 = ~53% alpha)
+          context.fillRect(drawX, drawY, CELL_SIZE, CELL_SIZE);
+
+          const borderColor = darkenColor(overlayColor, 0.3);
+          context.strokeStyle = borderColor;
+          context.lineWidth = 0.25;
+          context.strokeRect(drawX + 0.125, drawY + 0.125, CELL_SIZE - 0.25, CELL_SIZE - 0.25);
+        }
       } else {
         context.fillStyle = "#f4f3ef";
         context.fillRect(drawX, drawY, CELL_SIZE, CELL_SIZE);
@@ -233,14 +274,14 @@ export default function FastVisualization({ handleClickAbout }) {
 
     preRenderedGridRef.current = offscreenCanvas;
     setIsGridReady(true);
-  }, [images]);
+  }, [images, colorMode]);
 
   useEffect(() => {
     if (Object.keys(images).length > 0) {
       setIsGridReady(false);
       compositeGrid(filters);
     }
-  }, [filters, images, compositeGrid]);
+  }, [colorMode, filters, images, compositeGrid]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -256,7 +297,7 @@ export default function FastVisualization({ handleClickAbout }) {
     let animationFrameId;
 
     // params: image, highlightDrawX, highlightDrawY, highlightSize, highlightSize
-    function drawDarkened(image, x, y, size, gamma = 2.0) {
+    function drawDarkened(image, x, y, size, gamma) {
       // create a temporary canvas same size as the area you want to draw
       const tmp = document.createElement('canvas');
       tmp.width = size;
@@ -370,12 +411,25 @@ export default function FastVisualization({ handleClickAbout }) {
 
           context.fillStyle = "#d7ecff";
           context.strokeStyle = "#5dade2";
+
           context.lineWidth = 3.5;
 
-          //context.fillRect(highlightDrawX, highlightDrawY, highlightSize, highlightSize);
-          context.strokeRect(highlightDrawX, highlightDrawY, highlightSize, highlightSize);
+          let overlayColor = null;
+          if (colorMode === "Age") overlayColor = AGE_COLORS(selectedData.age);
+          else if (colorMode === "Gender") overlayColor = GENDER_COLORS[selectedData.gender];
+          else if (colorMode === "Sound Type")
+            overlayColor = SOUND_TYPE_STYLES[selectedData.sound_type]?.color;
 
-          drawDarkened(image, highlightDrawX, highlightDrawY, highlightSize, 2.0);
+          if (overlayColor) {
+            const borderColor = darkenColor(overlayColor, 0.3);
+            context.strokeStyle = borderColor;
+            context.strokeRect(highlightDrawX, highlightDrawY, highlightSize, highlightSize);
+          } else {
+            context.strokeStyle = "#5dade2";
+            context.strokeRect(highlightDrawX, highlightDrawY, highlightSize, highlightSize);
+          }
+
+          drawDarkened(image, highlightDrawX, highlightDrawY, highlightSize, 4.0);
           //context.drawImage(image, highlightDrawX, highlightDrawY, highlightSize, highlightSize);
 
           context.fillStyle = 'rgba(215, 236, 255, 0.4)';
@@ -752,6 +806,73 @@ export default function FastVisualization({ handleClickAbout }) {
             AGE_COLORS={AGE_COLORS}
           />
         </div>
+
+        <div className="fixed bottom-6 left-6 z-20 bg-white border border-gray-300 rounded-lg shadow-md p-2">
+          <label className="text-sm font-semibold mr-2">Color by:</label>
+          <select
+            value={colorMode}
+            onChange={(e) => setColorMode(e.target.value)}
+            className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+          >
+            <option value="None">None</option>
+            <option value="Age">Age</option>
+            <option value="Gender">Gender</option>
+            <option value="Sound Type">Sound Type</option>
+          </select>
+        </div>
+
+        <div className="fixed bottom-6 left-6 z-20 bg-white border border-gray-300 rounded-lg shadow-md p-3">
+          <label className="text-sm font-semibold mr-2">Color by:</label>
+          <select
+            value={colorMode}
+            onChange={(e) => setColorMode(e.target.value)}
+            className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 mb-2"
+          >
+            <option value="None">None</option>
+            <option value="Age">Age</option>
+            <option value="Gender">Gender</option>
+            <option value="Sound Type">Sound Type</option>
+          </select>
+
+          {/* Dynamic legend */}
+          {colorMode !== "None" && (
+            <div className="mt-2 space-y-1 text-xs">
+              {colorMode === "Age" &&
+                Object.entries(AGE_RANGE_TO_COLOR).map(([range, color]) => (
+                  <div key={range} className="flex items-center space-x-2">
+                    <span
+                      className="w-3 h-3 rounded"
+                      style={{ backgroundColor: color }}
+                    ></span>
+                    <span>{range}</span>
+                  </div>
+                ))}
+
+              {colorMode === "Gender" &&
+                Object.entries(GENDER_COLORS).map(([gender, color]) => (
+                  <div key={gender} className="flex items-center space-x-2">
+                    <span
+                      className="w-3 h-3 rounded"
+                      style={{ backgroundColor: color }}
+                    ></span>
+                    <span>{gender}</span>
+                  </div>
+                ))}
+
+              {colorMode === "Sound Type" &&
+                Object.entries(SOUND_TYPE_STYLES).map(([type, { color }]) => (
+                  <div key={type} className="flex items-center space-x-2">
+                    <span
+                      className="w-3 h-3 rounded"
+                      style={{ backgroundColor: color }}
+                    ></span>
+                    <span>{type}</span>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+
       </div>)}
     </div>
   );

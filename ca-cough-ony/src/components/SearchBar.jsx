@@ -102,37 +102,39 @@ export default function SearchBar({
       )}
 
       {/* Filter tags */}
-      {filters.length > 0 && (<div className="fixed bottom-4 flex space-x-2 bg-white px-3 py-2 rounded-lg shadow-md">
-        {filters.map((f) => (
-          <div
-            key={f.name}
-            className="flex items-center space-x-2 px-2 py-1 rounded-md border"
-            style={{
-              borderColor: getColor(f.name),
-              opacity: f.active ? 1 : 0.5,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={f.active}
-              onChange={() => handleToggle(f.name)}
-              style={{ accentColor: getColor(f.name) }}
-            />
-            <span
-              className="text-xs font-semibold"
-              style={{ color: getColor(f.name) }}
+      {filters.length > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex flex-wrap justify-center items-center bg-white px-3 py-2 rounded-lg shadow-md space-x-2 max-w-[80vw] overflow-x-auto">
+          {filters.map((f) => (
+            <div
+              key={f.name}
+              className="flex items-center space-x-2 px-2 py-1 rounded-md border"
+              style={{
+                borderColor: getColor(f.name),
+                opacity: f.active ? 1 : 0.5,
+              }}
             >
-              {f.name}
-            </span>
-            <button
-              onClick={() => handleRemove(f.name)}
-              className="text-gray-400 hover:text-black text-xs"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-      </div>)}
+              <input
+                type="checkbox"
+                checked={f.active}
+                onChange={() => handleToggle(f.name)}
+                style={{ accentColor: getColor(f.name) }}
+              />
+              <span
+                className="text-xs font-semibold"
+                style={{ color: getColor(f.name) }}
+              >
+                {f.name}
+              </span>
+              <button
+                onClick={() => handleRemove(f.name)}
+                className="text-gray-400 hover:text-black text-xs"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
