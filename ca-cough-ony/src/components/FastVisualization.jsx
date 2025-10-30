@@ -540,6 +540,7 @@ export default function FastVisualization({ handleClickAbout }) {
     setSelected({ x: targetX, y: targetY });
     const fileName = finalSelectedData.file_name;
     const audioPath = `audio_processed/${fileName}.wav`;
+    //const audioPath = `audio_processed_mp3/${fileName}.mp3`;
 
     const now = Date.now();
     if (now - lastPlayTimeRef.current < MIN_PLAY_INTERVAL_MS) {
