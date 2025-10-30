@@ -1,8 +1,9 @@
 import React, { useEffect, useLayoutEffect, useState, useRef, useCallback } from "react";
 import dataJson from "/Users/hishambhatti/Desktop/Projects/human-health-sounds/ca-cough-ony/vocalsound_processed_grid_index_p50.json"
-import IconButton from "./IconButton";
 import SearchBar from "./SearchBar";
 import ProgressBar from "./ProgressBar";
+import AboutButton from "./AboutButton";
+import ZoomButton from "./ZoomButton";
 
 // --- CONSTANTS & HELPER FUNCTIONS (Unchanged) ---
 const SOUND_TYPE_STYLES = {
@@ -55,7 +56,7 @@ const CELL_GAP = 0
 const INITIAL_SCALE = 2.0;
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 8.0;
-const ZOOM_FACTOR = 1.02;
+const ZOOM_FACTOR = 1.03;
 const WHEEL_ZOOM_FACTOR = 1.05;
 const CENTER_SMOOTHING_FACTOR = 0.08;
 const MIN_PLAY_INTERVAL_MS = 125; // Max 8 playing simultaneously
@@ -772,28 +773,28 @@ export default function FastVisualization({ handleClickAbout }) {
 
       {selectedData && isGridReady && (<div>
         <div className="fixed top-6 right-6 z-20">
-        <IconButton handleClick={handleClickAbout}>
+        <AboutButton handleClick={handleClickAbout}>
           ?
-        </IconButton>
+        </AboutButton>
         </div>
 
         <div className="fixed bottom-6 right-6 z-20 flex flex-col items-center space-y-4">
-          <IconButton
+          <ZoomButton
             onMouseDown={handleZoomInStart}
             onMouseUp={stopZoom}
             onMouseLeave={stopZoom}
             disabled={transform.scale >= MAX_SCALE}
           >
             +
-          </IconButton>
-          <IconButton
+          </ZoomButton>
+          <ZoomButton
             onMouseDown={handleZoomOutStart}
             onMouseUp={stopZoom}
             onMouseLeave={stopZoom}
             disabled={isPerfectlyCentered}
           >
             &minus;
-          </IconButton>
+          </ZoomButton>
         </div>
 
         <div className="fixed top-6 left-6 z-20">
