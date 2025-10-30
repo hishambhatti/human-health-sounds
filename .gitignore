@@ -1,6 +1,6 @@
 .DS_Store
 vs_release_16k/audio_16k/*
 
-ca-cough-ony/public/audio
+ca-cough-ony/public/audio_processed_mp3
 
 audio/*
