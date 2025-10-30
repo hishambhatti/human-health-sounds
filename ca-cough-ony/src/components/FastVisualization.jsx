@@ -534,7 +534,7 @@ export default function FastVisualization({ handleClickAbout }) {
     if (!finalSelectedData) return;
 
     // Prevent unnecessary state updates if we snapped to the current selection
-    if (targetX === selected.x && targetY === selected.y) return;
+    //if (targetX === selected.x && targetY === selected.y) return;
 
     // 4. Update the selection and play the audio
     setSelected({ x: targetX, y: targetY });
