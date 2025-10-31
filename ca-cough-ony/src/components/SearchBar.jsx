@@ -74,11 +74,11 @@ export default function SearchBar({
   return (
     <div className="w-full flex flex-col items-center">
       {/* Search box */}
-      <div className="flex items-center bg-white rounded-lg shadow-md px-4 py-2 w-[300px]">
+      <div className="flex items-center bg-white rounded-lg shadow-md px-4 py-2 w-[200px]">
         <Search size={18} className="text-gray-400 mr-2" />
         <input
           type="text"
-          placeholder="Search sound, gender, or age"
+          placeholder="Search for filters"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="w-full text-sm outline-none"
@@ -87,7 +87,7 @@ export default function SearchBar({
 
       {/* Dropdown options */}
       {query && (
-        <div className="bg-white rounded-lg shadow-md mt-2 w-[300px] max-h-[150px] overflow-y-auto">
+        <div className="bg-white rounded-lg shadow-md mt-2 w-[200px] max-h-[150px] overflow-y-auto">
           {filteredOptions.map((opt) => (
             <div
               key={opt}

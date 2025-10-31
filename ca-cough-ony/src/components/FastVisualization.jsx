@@ -55,8 +55,10 @@ export default function FastVisualization({ handleClickAbout }) {
 
   const trailHighlightsRef = useRef([]);
 
+  const [isControlPanelMinimized, setIsControlPanelMinimized] = useState(false);
+
   const PAN_EDGE_THRESHOLD = 50;   // px from edge to start panning
-  const PAN_SPEED = 0.3;         // smaller = slower pan (tune)
+  const PAN_SPEED = 0.05;         // smaller = slower pan (tune)
   const panDirectionRef = useRef({ dx: 0, dy: 0 });
   const isPanningRef = useRef(false);
 
@@ -633,7 +635,6 @@ export default function FastVisualization({ handleClickAbout }) {
     if (isPanningRef.current) {
       const { vx, vy } = panDirectionRef.current;
 
-      // ✅ apply grid edge stop
       const { vx: cx, vy: cy } = clampPanToGrid(vx, vy, selected.x, selected.y);
 
       if (cx !== 0 || cy !== 0) {
@@ -649,7 +650,6 @@ export default function FastVisualization({ handleClickAbout }) {
         };
         handleCellSelect(...Object.values(getCellCoordinates(fakeEvent)));
       } else {
-        // ✅ stop panning if both components blocked
         isPanningRef.current = false;
       }
     }
@@ -887,37 +887,54 @@ export default function FastVisualization({ handleClickAbout }) {
           />
         </div>
 
-        <div className="fixed bottom-6 left-6 z-20 bg-white border border-gray-300 rounded-lg shadow-md p-2">
-          <label className="text-sm font-semibold mr-2">Color by:</label>
-          <select
-            value={colorMode}
-            onChange={(e) => setColorMode(e.target.value)}
-            className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-          >
-            <option value="None">None</option>
-            <option value="Age">Age</option>
-            <option value="Gender">Gender</option>
-            <option value="Sound Type">Sound Type</option>
-          </select>
-        </div>
+        <div
+          className={`fixed bottom-0 left-6 z-20 bg-white border border-gray-300 rounded-t-lg shadow-2xl p-3 transform transition-transform duration-300 ease-in-out ${
+            isControlPanelMinimized ? 'translate-y-[calc(100%-50px)]' : 'translate-y-0 bottom-6'
+          }`}
+          style={{
+            // Keep bottom-6 margin when restored, and snap to actual bottom when minimized
+            bottom: isControlPanelMinimized ? '0' : '24px',
+            // Add a small max-height to ensure smooth transition
+            maxHeight: '400px',
+          }}
+        >
+          <div className="flex items-start justify-between">
+            {/* Control Group - Always Visible (even when minimized) */}
+            <div className="flex items-center">
+              <label className="text-sm font-semibold mr-2">Color by:</label>
+              <select
+                value={colorMode}
+                onChange={(e) => setColorMode(e.target.value)}
+                className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                // Disable select when minimized, so the click restores it
+                //disabled={isControlPanelMinimized}
+                onClick={isControlPanelMinimized ? () => setIsControlPanelMinimized(false) : undefined}
+              >
+                <option value="None">None</option>
+                <option value="Age">Age</option>
+                <option value="Gender">Gender</option>
+                <option value="Sound Type">Sound Type</option>
+              </select>
+            </div>
 
-        <div className="fixed bottom-6 left-6 z-20 bg-white border border-gray-300 rounded-lg shadow-md p-3">
-          <label className="text-sm font-semibold mr-2">Color by:</label>
-          <select
-            value={colorMode}
-            onChange={(e) => setColorMode(e.target.value)}
-            className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 mb-2"
-          >
-            <option value="None">None</option>
-            <option value="Age">Age</option>
-            <option value="Gender">Gender</option>
-            <option value="Sound Type">Sound Type</option>
-          </select>
+            {/* Minimize/Restore Button */}
+            <button
+              onClick={() => setIsControlPanelMinimized(prev => !prev)}
+              className="ml-4 p-1 rounded-full hover:bg-gray-100 transition-colors focus:outline-none"
+              title={isControlPanelMinimized ? "Restore Panel" : "Minimize Panel"}
+            >
+              <span className="text-lg leading-none">
+                {isControlPanelMinimized ? '▲' : '▼'}
+              </span>
+            </button>
+          </div>
 
-          {/* Dynamic legend */}
-          {colorMode !== "None" && (
+          {/* Dynamic legend - Conditionally rendered/styled to be hidden when minimized */}
+          {!isControlPanelMinimized && colorMode !== "None" && (
             <div className="mt-2 space-y-1 text-xs">
               {colorMode === "Age" &&
+                // Note: You seem to have a placeholder C.AGE_RANGE_TO_COLOR, which I'll assume is an object you have defined
+                // If not, you might need to map C.AGE_RANGES to generate this legend.
                 Object.entries(C.AGE_RANGE_TO_COLOR).map(([range, color]) => (
                   <div key={range} className="flex items-center space-x-2">
                     <span
@@ -952,6 +969,7 @@ export default function FastVisualization({ handleClickAbout }) {
             </div>
           )}
         </div>
+// ...
 
       </div>)}
     </div>
