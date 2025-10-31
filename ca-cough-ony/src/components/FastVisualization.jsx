@@ -466,14 +466,9 @@ export default function FastVisualization({ handleClickAbout }) {
   }, []); // Dependency array is only needed if used in a component's body
 
   const handleCellSelect = useCallback((x, y) => {
-    if (x < 0 || x >= C.GRID_SIZE || y < 0 || y >= C.GRID_SIZE) return;
 
-    // let clampedX = Math.max(0, Math.min(C.GRID_SIZE - 1, x));
-    //let clampedY = Math.max(0, Math.min(C.GRID_SIZE - 1, y));
-
-    // The logic requested: "if you select something more above the top of the grid,
-    // you snap to the top element and the left right index corresponding to where you selected."
-    // This is accomplished by the clamping above: if x < 0, it becomes 0. If x > max, it becomes max.
+    x = Math.max(0, Math.min(x, C.GRID_SIZE - 1));
+    y = Math.max(0, Math.min(y, C.GRID_SIZE - 1));
 
     // 2. Determine the target cell coordinates after clamping (potential snap)
     let targetX = x;
