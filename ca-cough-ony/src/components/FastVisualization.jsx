@@ -617,14 +617,11 @@ export default function FastVisualization({ handleClickAbout }) {
   function clampPanToGrid(vx, vy, selX, selY) {
   let cx = vx, cy = vy;
 
-  // Right boundary
-  if (selX === C.GRID_SIZE - 1 && vx > 0) cx = 0;
-  // Left boundary
-  if (selX === 0 && vx < 0) cx = 0;
-  // Bottom boundary
-  if (selY === C.GRID_SIZE - 1 && vy > 0) cy = 0;
-  // Top boundary
-  if (selY === 0 && vy < 0) cy = 0;
+  // Right, left, bottom, top boundaries
+  if((selX === C.GRID_SIZE - 1 && vx > 0) || (selX === 0 && vx < 0) || (selY === C.GRID_SIZE - 1 && vy > 0) || (selY === 0 && vy < 0)) {
+    cx = 0;
+    cy = 0;
+  }
 
   return { vx: cx, vy: cy };
 }
