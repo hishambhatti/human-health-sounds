@@ -55,6 +55,28 @@ export default function FastVisualization({ handleClickAbout }) {
 
   const trailHighlightsRef = useRef([]);
 
+  const PAN_EDGE_THRESHOLD = 100;   // px from edge to start panning
+  const PAN_SPEED = 0.04;         // smaller = slower pan (tune)
+  const panDirectionRef = useRef({ dx: 0, dy: 0 });
+  const isPanningRef = useRef(false);
+
+  function getPanVector(clientX, clientY, rect) {
+    const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+
+      // Distance from center
+      const dx = clientX - centerX;
+      const dy = clientY - centerY;
+
+      const mag = Math.sqrt(dx*dx + dy*dy);
+      if (mag === 0) return { vx: 0, vy: 0 };
+
+      // Normalize
+      return { vx: dx / mag, vy: dy / mag };
+  }
+
+  const lastMousePos = useRef({ x: 0, y: 0 });
+
   const [transform, setTransform] = useState({
     scale: C.MIN_SCALE,
     translateX: 0,
@@ -391,7 +413,7 @@ export default function FastVisualization({ handleClickAbout }) {
     // Cleanup function to stop the animation when component unmounts or deps change
     return () => cancelAnimationFrame(animationFrameId);
 
-  }, [transform, selected, isGridReady, images]);
+  }, [transform, selected, isGridReady, images, colorMode]);
 
   const getCellCoordinates = useCallback((e) => {
     const rect = canvasRef.current.getBoundingClientRect();
@@ -446,7 +468,14 @@ export default function FastVisualization({ handleClickAbout }) {
   const handleCellSelect = useCallback((x, y) => {
     if (x < 0 || x >= C.GRID_SIZE || y < 0 || y >= C.GRID_SIZE) return;
 
-    // 1. Determine the target cell coordinates
+    // let clampedX = Math.max(0, Math.min(C.GRID_SIZE - 1, x));
+    //let clampedY = Math.max(0, Math.min(C.GRID_SIZE - 1, y));
+
+    // The logic requested: "if you select something more above the top of the grid,
+    // you snap to the top element and the left right index corresponding to where you selected."
+    // This is accomplished by the clamping above: if x < 0, it becomes 0. If x > max, it becomes max.
+
+    // 2. Determine the target cell coordinates after clamping (potential snap)
     let targetX = x;
     let targetY = y;
 
@@ -508,9 +537,55 @@ export default function FastVisualization({ handleClickAbout }) {
 
   const handleCanvasMouseMove = useCallback((e) => {
     if (!isMouseDownRef.current) return;
+
+    const rect = canvasRef.current.getBoundingClientRect();
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
+
+    // Only start panning if near the edge band
+    const nearEdge =
+      e.clientX < rect.left + PAN_EDGE_THRESHOLD ||
+      e.clientX > rect.right - PAN_EDGE_THRESHOLD ||
+      e.clientY < rect.top + PAN_EDGE_THRESHOLD ||
+      e.clientY > rect.bottom - PAN_EDGE_THRESHOLD;
+
+    if (isMouseDownRef.current && nearEdge) {
+      const { vx, vy } = getPanVector(e.clientX, e.clientY, rect);
+      panDirectionRef.current = { vx, vy };
+      isPanningRef.current = true;
+    } else {
+      isPanningRef.current = false;
+    }
+
+    // still do your cell selection
     const { x, y } = getCellCoordinates(e);
     handleCellSelect(x, y);
   }, [getCellCoordinates, handleCellSelect]);
+
+//   useEffect(() => {
+//   let raf;
+
+//   const loop = () => {
+//     if (isMouseDownRef.current) {
+//       const { dx, dy } = calculatePanAdjustments(transform, selected.x, selected.y);
+
+//       if (dx !== 0 || dy !== 0) {
+//         setTransform(prev => ({
+//           ...prev,
+//           translateX: prev.translateX - dx,  // subtract = world moves opposite direction
+//           translateY: prev.translateY - dy
+//         }));
+
+//         // auto-select if we moved enough into new cell territory
+//         handleCellSelect(selected.x, selected.y);
+//       }
+//     }
+
+//     raf = requestAnimationFrame(loop);
+//   };
+
+//   raf = requestAnimationFrame(loop);
+//   return () => cancelAnimationFrame(raf);
+// }, [transform, selected, calculatePanAdjustments, handleCellSelect]);
 
   const handleMouseDown = useCallback((e) => {
     isMouseDownRef.current = true;
@@ -519,12 +594,48 @@ export default function FastVisualization({ handleClickAbout }) {
 
   const handleMouseUp = useCallback(() => {
     isMouseDownRef.current = false;
+    isPanningRef.current = false;
   }, []);
 
   useEffect(() => {
       window.addEventListener('mouseup', handleMouseUp);
       return () => window.removeEventListener('mouseup', handleMouseUp);
   }, [handleMouseUp]);
+
+  useEffect(() => {
+  let rafId;
+
+  const panLoop = () => {
+    if (isPanningRef.current) {
+      setTransform(prev => {
+    const { vx, vy } = panDirectionRef.current;
+
+    // Move in screen space, not grid-space
+    const px = vx * PAN_SPEED * 100;
+    const py = vy * PAN_SPEED * 100;
+
+    return {
+      ...prev,
+      translateX: prev.translateX - px,
+      translateY: prev.translateY - py
+    };
+  });
+
+      // Now auto-select new cells as we move
+      const fakeEvent = {
+        clientX: lastMousePos.current.x,
+        clientY: lastMousePos.current.y
+      };
+      handleCellSelect(...Object.values(getCellCoordinates(fakeEvent)));
+    }
+
+    rafId = requestAnimationFrame(panLoop);
+  };
+
+  rafId = requestAnimationFrame(panLoop);
+  return () => cancelAnimationFrame(rafId);
+}, [getCellCoordinates, handleCellSelect]);
+
 
 
   const animateToCenter = useCallback(() => {
