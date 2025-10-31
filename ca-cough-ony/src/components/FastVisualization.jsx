@@ -56,7 +56,7 @@ export default function FastVisualization({ handleClickAbout }) {
   const trailHighlightsRef = useRef([]);
 
   const PAN_EDGE_THRESHOLD = 50;   // px from edge to start panning
-  const PAN_SPEED = 0.05;         // smaller = slower pan (tune)
+  const PAN_SPEED = 0.3;         // smaller = slower pan (tune)
   const panDirectionRef = useRef({ dx: 0, dy: 0 });
   const isPanningRef = useRef(false);
 
@@ -476,12 +476,15 @@ export default function FastVisualization({ handleClickAbout }) {
 
   const handleCellSelect = useCallback((x, y) => {
 
+
     x = Math.max(0, Math.min(x, C.GRID_SIZE - 1));
     y = Math.max(0, Math.min(y, C.GRID_SIZE - 1));
 
     // 2. Determine the target cell coordinates after clamping (potential snap)
     let targetX = x;
     let targetY = y;
+
+    //const changedSelect = (x != selected.x || y != selected.y)
 
     const flippedY = C.GRID_SIZE - 1 - y;
     const key = `${x}_${flippedY}`;
@@ -534,9 +537,12 @@ export default function FastVisualization({ handleClickAbout }) {
       });
     }
 
-    lastPlayTimeRef.current = now; // Update the last play time
+    //if (changedSelect) {
+      lastPlayTimeRef.current = now; // Update the last play time
     const newAudio = new Audio(audioPath);
     newAudio.play().catch(() => {});
+    //}
+
   }, [selected.x, selected.y, filters, findNearestValidCell]);
 
   const handleCanvasMouseMove = useCallback((e) => {
@@ -545,7 +551,7 @@ export default function FastVisualization({ handleClickAbout }) {
     const rect = canvasRef.current.getBoundingClientRect();
     lastMousePos.current = { x: e.clientX, y: e.clientY };
 
-    const threshold = 25 * transform.scale + 80
+    const threshold = 15 * transform.scale + 80
     const edges = getAxisPanIntent(e, rect, threshold);
 
     // compute raw direction
