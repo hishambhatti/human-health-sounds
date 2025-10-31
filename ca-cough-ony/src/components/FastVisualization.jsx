@@ -4,67 +4,12 @@ import SearchBar from "./SearchBar";
 import ProgressBar from "./ProgressBar";
 import AboutButton from "./AboutButton";
 import ZoomButton from "./ZoomButton";
+import * as C from "../visualization-config";
 
-// --- CONSTANTS & HELPER FUNCTIONS (Unchanged) ---
-const SOUND_TYPE_STYLES = {
-  Sigh: { color: "#5DADE2", emoji: "🥱" },
-  Throatclearing: { color: "#F5B041", emoji: "😤" },
-  Sniff: { color: "#48C9B0", emoji: "👃" },
-  Laughter: { color: "#E84393", emoji: "😂" },
-  Sneeze: { color: "#E74C3C", emoji: "🤧" },
-  Cough: { color: "#8E44AD", emoji: "😮‍💨" },
-};
-
-const GENDER_COLORS = {
-  Male: "#3498DB",
-  Female: "#E84393",
-  Other: "#1ABC9C",
-};
-
-const AGE_COLORS = (age) => {
-  const n = Number(age);
-  if (n >= 18 && n <= 24) return "#2ECC71";
-  if (n >= 25 && n <= 34) return "#F1C40F";
-  if (n >= 35 && n <= 44) return "#E67E22";
-  if (n >= 45 && n <= 54) return "#E74C3C";
-  if (n >= 55 && n <= 64) return "#9B59B6";
-  if (n >= 65) return "#9B59B6";
-  return "#BDC3C7"; // fallback gray
-};
-
-const AGE_RANGES = [
-  { label: "18–24", min: 18, max: 24 },
-  { label: "25–34", min: 25, max: 34 },
-  { label: "35–44", min: 35, max: 44 },
-  { label: "45–54", min: 45, max: 54 },
-  { label: "55–64", min: 55, max: 64 },
-  { label: "65+", min: 65, max: Infinity },
-];
-
-const AGE_RANGE_TO_COLOR = {
-  "18-24": "#2ECC71",
-  "25–34": "#F1C40F",
-  "35–44": "#E67E22",
-  "45–54": "#E74C3C",
-  "55–64":"#9B59B6",
-  "65+": "#9B59B6"
-}
-
-const GRID_SIZE = 144
-const CELL_SIZE = 8
-const CELL_GAP = 0
-const INITIAL_SCALE = 2.0;
-const MIN_SCALE = 0.5;
-const MAX_SCALE = 8.0;
-const ZOOM_FACTOR = 1.03;
-const WHEEL_ZOOM_FACTOR = 1.05;
-const CENTER_SMOOTHING_FACTOR = 0.08;
-const MIN_PLAY_INTERVAL_MS = 125; // Max 8 playing simultaneously
 const IMAGE_LOAD_PATH = "sparse_spectrograms";
+const CANVAS_DRAW_SIZE = C.GRID_SIZE * (C.CELL_SIZE + C.CELL_GAP);
 
-const CANVAS_DRAW_SIZE = GRID_SIZE * (CELL_SIZE + CELL_GAP);
-
-const checkFilters = (data, filters, AGE_RANGES) => {
+const checkFilters = (data, filters) => {
   const activeFilters = filters.filter(f => f.active).map(f => f.name);
   if (activeFilters.length === 0) return true;
   if (!data) return false;
@@ -73,7 +18,7 @@ const checkFilters = (data, filters, AGE_RANGES) => {
     if (f === data.gender || f.toLowerCase() === data.sound_type.toLowerCase()) return true;
 
     const ageLabel = f.replace("Age: ", "");
-    const range = AGE_RANGES.find((r) => r.label === ageLabel);
+    const range = C.AGE_RANGES.find((r) => r.label === ageLabel);
     if (range) {
       const ageNum = Number(data.age);
       return ageNum >= range.min && ageNum <= range.max;
@@ -84,7 +29,7 @@ const checkFilters = (data, filters, AGE_RANGES) => {
 
 // --- NEW COMPONENT ---
 export default function FastVisualization({ handleClickAbout }) {
-  const initialCenterIndex = Math.floor(GRID_SIZE / 2);
+  const initialCenterIndex = Math.floor(C.GRID_SIZE / 2);
   const [selected, setSelected] = useState({ x: initialCenterIndex, y: initialCenterIndex })
   const [metadataPos, setMetadataPos] = useState({ left: 0, top: 0})
 
@@ -98,7 +43,6 @@ export default function FastVisualization({ handleClickAbout }) {
   const [initialCenterApplied, setInitialCenterApplied] = useState(false);
   const zoomIntervalRef = useRef(null);
   const smoothCenterTimeoutRef = useRef(null);
-  const panAnimationRef = useRef(null); // <-- NEW REF FOR CONTINUOUS PAN
 
   // Track last play time for audio buffer
   const lastPlayTimeRef = useRef(0);
@@ -110,65 +54,12 @@ export default function FastVisualization({ handleClickAbout }) {
   const [colorMode, setColorMode] = useState("None"); // "None", "Age", "Gender", "Sound Type"
 
   const trailHighlightsRef = useRef([]);
-  const TRAIL_FADE_MS = 1000; // 1 second fade duration
 
   const [transform, setTransform] = useState({
-    scale: MIN_SCALE,
+    scale: C.MIN_SCALE,
     translateX: 0,
     translateY: 0,
   });
-
-  const latestStateRef = useRef({ selected: selected, transform: transform })
-
-  // --- New Helper Function for Auto-Panning Adjustment ---
-  const calculatePanAdjustments = useCallback((currentTransform, selectedX, selectedY) => {
-    if (!canvasRef.current) return { deltaX: 0, deltaY: 0 };
-
-    const { scale: currentScale, translateX, translateY } = currentTransform;
-
-    const viewWidth = canvasRef.current.clientWidth;
-    const viewHeight = canvasRef.current.clientHeight;
-
-    // --- Adjust MAX_PAN_SPEED here for faster panning (e.g., 4.0 or more) ---
-    const MAX_PAN_SPEED = 5.0; // Increased speed for responsiveness
-    const edgeThresholdX = viewWidth * 0.25;
-    const edgeThresholdY = viewHeight * 0.25;
-
-    // Calculate selected cell's center in *screen* coordinates
-    const cellCenterX_grid = (selectedX * (CELL_SIZE + CELL_GAP)) + CELL_SIZE / 2;
-    const cellCenterY_grid = (selectedY * (CELL_SIZE + CELL_GAP)) + CELL_GAP / 2;
-
-    const currentScreenX = cellCenterX_grid * currentScale + translateX;
-    const currentScreenY = cellCenterY_grid * currentScale + translateY;
-
-    let deltaX = 0;
-    let deltaY = 0;
-
-    // 1. Check Horizontal Edges
-    if (currentScreenX < edgeThresholdX) {
-      // Too close to the LEFT edge - calculate pan amount based on proximity to edge
-      // Pan to the right (positive deltaX)
-      const proximity = edgeThresholdX - currentScreenX;
-      deltaX = MAX_PAN_SPEED * (proximity / edgeThresholdX);
-    } else if (currentScreenX > viewWidth - edgeThresholdX) {
-      // Too close to the RIGHT edge - Pan to the left (negative deltaX)
-      const proximity = currentScreenX - (viewWidth - edgeThresholdX);
-      deltaX = -MAX_PAN_SPEED * (proximity / edgeThresholdX);
-    }
-
-    // 2. Check Vertical Edges
-    if (currentScreenY < edgeThresholdY) {
-      // Too close to the TOP edge - Pan down (positive deltaY)
-      const proximity = edgeThresholdY - currentScreenY;
-      deltaY = MAX_PAN_SPEED * (proximity / edgeThresholdY);
-    } else if (currentScreenY > viewHeight - edgeThresholdY) {
-      // Too close to the BOTTOM edge - Pan up (negative deltaY)
-      const proximity = currentScreenY - (viewHeight - edgeThresholdY);
-      deltaY = -MAX_PAN_SPEED * (proximity / edgeThresholdY);
-    }
-
-    return { deltaX, deltaY };
-  }, []);
 
   // --- Centering Helper (Finds the translation for a cell to be centered on screen) ---
   const calculateCenterTransform = useCallback((scale, targetX, targetY) => {
@@ -177,8 +68,8 @@ export default function FastVisualization({ handleClickAbout }) {
     const screenCenterX = canvasRef.current.clientWidth / 2;
     const screenCenterY = canvasRef.current.clientHeight / 2;
 
-    const cellCenterX = (targetX * (CELL_SIZE + CELL_GAP)) + CELL_SIZE / 2;
-    const cellCenterY = (targetY * (CELL_SIZE + CELL_GAP)) + CELL_SIZE / 2;
+    const cellCenterX = (targetX * (C.CELL_SIZE + C.CELL_GAP)) + C.CELL_SIZE / 2;
+    const cellCenterY = (targetY * (C.CELL_SIZE + C.CELL_GAP)) + C.CELL_SIZE / 2;
 
     const newTranslateX = screenCenterX - (cellCenterX * scale);
     const newTranslateY = screenCenterY - (cellCenterY * scale);
@@ -262,12 +153,12 @@ export default function FastVisualization({ handleClickAbout }) {
   useLayoutEffect(() => {
     if (Object.keys(images).length > 0 && !initialCenterApplied && canvasSize.width > 0) {
 
-        const centerCellIndex = GRID_SIZE / 2;
+        const centerCellIndex = C.GRID_SIZE / 2;
 
-        const { translateX, translateY } = calculateCenterTransform(INITIAL_SCALE, centerCellIndex, centerCellIndex);
+        const { translateX, translateY } = calculateCenterTransform(C.INITIAL_SCALE, centerCellIndex, centerCellIndex);
 
         setTransform({
-            scale: INITIAL_SCALE,
+            scale: C.INITIAL_SCALE,
             translateX: translateX,
             translateY: translateY,
         });
@@ -292,37 +183,37 @@ export default function FastVisualization({ handleClickAbout }) {
     Object.keys(dataJson).forEach(key => {
       const [x, flippedY] = key.split("_").map(Number);
       const data = dataJson[key];
-      const y = GRID_SIZE - 1 - flippedY;
+      const y = C.GRID_SIZE - 1 - flippedY;
 
-      const matches = checkFilters(data, currentFilters, AGE_RANGES);
+      const matches = checkFilters(data, currentFilters, C.AGE_RANGES);
       const fileName = data.file_name;
       const image = images[fileName];
 
-      const drawX = x * (CELL_SIZE + CELL_GAP);
-      const drawY = y * (CELL_SIZE + CELL_GAP);
+      const drawX = x * (C.CELL_SIZE + C.CELL_GAP);
+      const drawY = y * (C.CELL_SIZE + C.CELL_GAP);
 
       if (matches && image) {
-        context.drawImage(image, drawX, drawY, CELL_SIZE, CELL_SIZE);
+        context.drawImage(image, drawX, drawY, C.CELL_SIZE, C.CELL_SIZE);
 
         // === NEW COLOR OVERLAY SECTION ===
         let overlayColor = null;
-        if (colorMode === "Age") overlayColor = AGE_COLORS(data.age);
-        else if (colorMode === "Gender") overlayColor = GENDER_COLORS[data.gender];
+        if (colorMode === "Age") overlayColor = C.AGE_COLORS(data.age);
+        else if (colorMode === "Gender") overlayColor = C.GENDER_COLORS[data.gender];
         else if (colorMode === "Sound Type")
-          overlayColor = SOUND_TYPE_STYLES[data.sound_type]?.color;
+          overlayColor = C.SOUND_TYPE_STYLES[data.sound_type]?.color;
 
         if (overlayColor) {
           context.fillStyle = overlayColor + "33"; // add transparency (hex 88 = ~53% alpha)
-          context.fillRect(drawX, drawY, CELL_SIZE, CELL_SIZE);
+          context.fillRect(drawX, drawY, C.CELL_SIZE, C.CELL_SIZE);
 
           const borderColor = darkenColor(overlayColor, 0.3);
           context.strokeStyle = borderColor;
           context.lineWidth = 0.25;
-          context.strokeRect(drawX + 0.125, drawY + 0.125, CELL_SIZE - 0.25, CELL_SIZE - 0.25);
+          context.strokeRect(drawX + 0.125, drawY + 0.125, C.CELL_SIZE - 0.25, C.CELL_SIZE - 0.25);
         }
       } else {
         context.fillStyle = "#f4f3ef";
-        context.fillRect(drawX, drawY, CELL_SIZE, CELL_SIZE);
+        context.fillRect(drawX, drawY, C.CELL_SIZE, C.CELL_SIZE);
       }
     });
 
@@ -412,7 +303,7 @@ export default function FastVisualization({ handleClickAbout }) {
       let shouldContinueAnimating = false;
 
       const trails = trailHighlightsRef.current.filter(
-      t => now - t.timestamp < TRAIL_FADE_MS
+      t => now - t.timestamp < C.TRAIL_FADE_MS
     );
       trailHighlightsRef.current = trails; // cleanup expired
 
@@ -420,45 +311,45 @@ export default function FastVisualization({ handleClickAbout }) {
       // Draw trails FIRST (below selection)
     trails.forEach(item => {
       const timePassed = now - item.timestamp;
-      const alpha = 1 - (timePassed / TRAIL_FADE_MS);
-      const cellDrawX = item.x * (CELL_SIZE + CELL_GAP);
-      const cellDrawY = item.y * (CELL_SIZE + CELL_GAP);
+      const alpha = 1 - (timePassed / C.TRAIL_FADE_MS);
+      const cellDrawX = item.x * (C.CELL_SIZE + C.CELL_GAP);
+      const cellDrawY = item.y * (C.CELL_SIZE + C.CELL_GAP);
       const screenX = cellDrawX * transform.scale + transform.translateX;
       const screenY = cellDrawY * transform.scale + transform.translateY;
-      const size = CELL_SIZE * transform.scale;
+      const size = C.CELL_SIZE * transform.scale;
       context.strokeStyle = `rgba(93, 173, 226, ${alpha})`;
       context.lineWidth = 1.5;
       context.strokeRect(screenX, screenY, size, size);
     });
 
       // Draw the Selection Highlight
-      const key = `${selX}_${GRID_SIZE - 1 - selY}`;
+      const key = `${selX}_${C.GRID_SIZE - 1 - selY}`;
       const selectedData = dataJson[key];
       const fileName = selectedData?.file_name;
       const image = images[fileName];
 
       if (image) {
-        const cellDrawX = selX * (CELL_SIZE + CELL_GAP);
-        const cellDrawY = selY * (CELL_SIZE + CELL_GAP);
+        const cellDrawX = selX * (C.CELL_SIZE + C.CELL_GAP);
+        const cellDrawY = selY * (C.CELL_SIZE + C.CELL_GAP);
 
         const screenX = cellDrawX * scale + translateX;
         const screenY = cellDrawY * scale + translateY;
 
-        const highlightSize = CELL_SIZE * 8;
+        const highlightSize = C.CELL_SIZE * 8;
 
-        const highlightOffset = (highlightSize - CELL_SIZE * scale) / 2;
+        const highlightOffset = (highlightSize - C.CELL_SIZE * scale) / 2;
 
         let highlightDrawX = screenX - highlightOffset;
 
-        // Note: CELL_SIZE * CELL_SIZE is a constant to make the metadata the right height above the selection
-        let highlightDrawY = screenY - highlightOffset + CELL_SIZE * CELL_SIZE;
+        // Note: C.CELL_SIZE * C.CELL_SIZE is a constant to make the metadata the right height above the selection
+        let highlightDrawY = screenY - highlightOffset + C.CELL_SIZE * C.CELL_SIZE;
 
-        setMetadataPos({ left: screenX + (CELL_SIZE * scale) / 2, top: highlightDrawY});
+        setMetadataPos({ left: screenX + (C.CELL_SIZE * scale) / 2, top: highlightDrawY});
 
         if (screenX + highlightSize > 0 && screenY + highlightSize > 0 &&
             screenX < viewWidth && screenY < viewHeight) {
 
-          const highlightOffset = (highlightSize - CELL_SIZE * scale) / 2;
+          const highlightOffset = (highlightSize - C.CELL_SIZE * scale) / 2;
 
           highlightDrawX = screenX - highlightOffset;
           highlightDrawY = screenY - highlightOffset;
@@ -469,10 +360,10 @@ export default function FastVisualization({ handleClickAbout }) {
           context.lineWidth = 3.5;
 
           let overlayColor = null;
-          if (colorMode === "Age") overlayColor = AGE_COLORS(selectedData.age);
-          else if (colorMode === "Gender") overlayColor = GENDER_COLORS[selectedData.gender];
+          if (colorMode === "Age") overlayColor = C.AGE_COLORS(selectedData.age);
+          else if (colorMode === "Gender") overlayColor = C.GENDER_COLORS[selectedData.gender];
           else if (colorMode === "Sound Type")
-            overlayColor = SOUND_TYPE_STYLES[selectedData.sound_type]?.color;
+            overlayColor = C.SOUND_TYPE_STYLES[selectedData.sound_type]?.color;
 
           if (overlayColor) {
             const borderColor = darkenColor(overlayColor, 0.3);
@@ -500,7 +391,7 @@ export default function FastVisualization({ handleClickAbout }) {
     // Cleanup function to stop the animation when component unmounts or deps change
     return () => cancelAnimationFrame(animationFrameId);
 
-  }, [transform, selected, isGridReady, images, colorMode]);
+  }, [transform, selected, isGridReady, images]);
 
   const getCellCoordinates = useCallback((e) => {
     const rect = canvasRef.current.getBoundingClientRect();
@@ -511,22 +402,22 @@ export default function FastVisualization({ handleClickAbout }) {
     const canvasY = clientY - rect.top;
     const gridX_pre_scale = (canvasX - translateX) / scale;
     const gridY_pre_scale = (canvasY - translateY) / scale;
-    const x = Math.floor(gridX_pre_scale / (CELL_SIZE + CELL_GAP));
-    const y = Math.floor(gridY_pre_scale / (CELL_SIZE + CELL_GAP));
+    const x = Math.floor(gridX_pre_scale / (C.CELL_SIZE + C.CELL_GAP));
+    const y = Math.floor(gridY_pre_scale / (C.CELL_SIZE + C.CELL_GAP));
     return { x, y };
   }, [transform]);
 
   // Add this helper function inside FastVisualization, near your other helper functions
   const findNearestValidCell = useCallback((startX, startY, currentFilters) => {
       // Check the start cell first
-      const key = `${startX}_${GRID_SIZE - 1 - startY}`;
+      const key = `${startX}_${C.GRID_SIZE - 1 - startY}`;
       const data = dataJson[key];
-      if (data && checkFilters(data, currentFilters, AGE_RANGES)) {
+      if (data && checkFilters(data, currentFilters, C.AGE_RANGES)) {
           return { x: startX, y: startY };
       }
 
       // Spiral search outwards
-      for (let r = 1; r < GRID_SIZE / 2; r++) { // r is the radius/distance
+      for (let r = 1; r < C.GRID_SIZE / 2; r++) { // r is the radius/distance
           // Check the boundary of the square defined by radius r
           for (let dx = -r; dx <= r; dx++) {
               for (let dy = -r; dy <= r; dy++) {
@@ -535,12 +426,12 @@ export default function FastVisualization({ handleClickAbout }) {
                       const x = startX + dx;
                       const y = startY + dy;
 
-                      if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
-                          const cellKey = `${x}_${GRID_SIZE - 1 - y}`;
+                      if (x >= 0 && x < C.GRID_SIZE && y >= 0 && y < C.GRID_SIZE) {
+                          const cellKey = `${x}_${C.GRID_SIZE - 1 - y}`;
                           const cellData = dataJson[cellKey];
 
                           // Check if cell exists and passes filters
-                          if (cellData && checkFilters(cellData, currentFilters, AGE_RANGES)) {
+                          if (cellData && checkFilters(cellData, currentFilters, C.AGE_RANGES)) {
                               return { x, y }; // Found the nearest valid cell
                           }
                       }
@@ -552,65 +443,17 @@ export default function FastVisualization({ handleClickAbout }) {
       return null; // No valid cell found within the search limit
   }, []); // Dependency array is only needed if used in a component's body
 
-  // --- New Animation Loop for Continuous Pan during Selection ---
-  const animateContinuousPan = useCallback(() => {
-    // 🛑 FIX 1: Always check for mouse down and access latest state from ref
-    if (!isMouseDownRef.current) {
-        panAnimationRef.current = null;
-        return;
-    }
-
-    const { selected, transform } = latestStateRef.current;
-
-    // 2. Calculate the pan adjustments
-    const { deltaX, deltaY } = calculatePanAdjustments(
-      transform, // Pass the current transform object
-      selected.x,
-      selected.y
-    );
-
-    if (deltaX !== 0 || deltaY !== 0) {
-        setTransform(prevTransform => {
-            const newTransform = {
-            ...prevTransform,
-            // Apply the delta for a smooth pan
-            translateX: prevTransform.translateX + deltaX,
-            translateY: prevTransform.translateY + deltaY,
-            };
-
-            // 🛑 FIX 3: Update the transform ref here for the next frame
-            latestStateRef.current.transform = newTransform;
-
-            return newTransform;
-        });
-        // Request next frame to continue the pan
-        panAnimationRef.current = requestAnimationFrame(animateContinuousPan);
-    } else {
-        // Stop the loop if the selection is no longer near an edge
-        panAnimationRef.current = null;
-    }
-
-  }, [calculatePanAdjustments]);
-
-  const startContinuousPan = useCallback(() => {
-    // Only start if the mouse is down and the animation is not already running
-    if (isMouseDownRef.current && panAnimationRef.current === null) {
-        // 🛑 NEW: Start the loop
-        panAnimationRef.current = requestAnimationFrame(animateContinuousPan);
-    }
-  }, [animateContinuousPan]);
-
   const handleCellSelect = useCallback((x, y) => {
-    if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
+    if (x < 0 || x >= C.GRID_SIZE || y < 0 || y >= C.GRID_SIZE) return;
 
     // 1. Determine the target cell coordinates
     let targetX = x;
     let targetY = y;
 
-    const flippedY = GRID_SIZE - 1 - y;
+    const flippedY = C.GRID_SIZE - 1 - y;
     const key = `${x}_${flippedY}`;
     const selectedData = dataJson[key];
-    const isCursorCellValid = selectedData && checkFilters(selectedData, filters, AGE_RANGES);
+    const isCursorCellValid = selectedData && checkFilters(selectedData, filters, C.AGE_RANGES);
 
     if (!isCursorCellValid) {
         // 2. If the cursor cell is NOT valid, find the nearest valid one
@@ -627,7 +470,7 @@ export default function FastVisualization({ handleClickAbout }) {
     }
 
     // Now, retrieve the data for the *actual* target cell (which may have been snapped)
-    const targetFlippedY = GRID_SIZE - 1 - targetY;
+    const targetFlippedY = C.GRID_SIZE - 1 - targetY;
     const targetKey = `${targetX}_${targetFlippedY}`;
     const finalSelectedData = dataJson[targetKey];
 
@@ -639,35 +482,29 @@ export default function FastVisualization({ handleClickAbout }) {
 
     // 4. Update the selection and play the audio
     setSelected({ x: targetX, y: targetY });
-
-    // 🛑 FIX 4: Update the selected ref here (right after setSelected)
-    latestStateRef.current.selected = { x: targetX, y: targetY };
-
-
     const fileName = finalSelectedData.file_name;
     const audioPath = `audio_processed/${fileName}.wav`;
     //const audioPath = `audio_processed_mp3/${fileName}.mp3`;
 
     const now = Date.now();
-    if (now - lastPlayTimeRef.current >= MIN_PLAY_INTERVAL_MS) {
-      // Only add the *old* selection to the trail if the new audio *will* play.
-      const oldKey = `${selected.x}_${GRID_SIZE - 1 - selected.y}`;
-      if (dataJson[oldKey]) {
-          trailHighlightsRef.current.push({
-          x: selected.x,
-          y: selected.y,
-          timestamp: now
-        });
-      }
-
-      lastPlayTimeRef.current = now; // Update the last play time
-      const newAudio = new Audio(audioPath);
-      newAudio.play().catch(() => {});
+    if (now - lastPlayTimeRef.current < C.MIN_PLAY_INTERVAL_MS) {
+        return;
     }
 
-    startContinuousPan();
+    // Only add the *old* selection to the trail if the new audio *will* play.
+    const oldKey = `${selected.x}_${C.GRID_SIZE - 1 - selected.y}`;
+    if (dataJson[oldKey]) {
+        trailHighlightsRef.current.push({
+        x: selected.x,
+        y: selected.y,
+        timestamp: now
+      });
+    }
 
-  }, [selected.x, selected.y, filters, findNearestValidCell, startContinuousPan]);
+    lastPlayTimeRef.current = now; // Update the last play time
+    const newAudio = new Audio(audioPath);
+    newAudio.play().catch(() => {});
+  }, [selected.x, selected.y, filters, findNearestValidCell]);
 
   const handleCanvasMouseMove = useCallback((e) => {
     if (!isMouseDownRef.current) return;
@@ -682,11 +519,6 @@ export default function FastVisualization({ handleClickAbout }) {
 
   const handleMouseUp = useCallback(() => {
     isMouseDownRef.current = false;
-
-    if (panAnimationRef.current) {
-        cancelAnimationFrame(panAnimationRef.current);
-        panAnimationRef.current = null;
-    }
   }, []);
 
   useEffect(() => {
@@ -694,9 +526,10 @@ export default function FastVisualization({ handleClickAbout }) {
       return () => window.removeEventListener('mouseup', handleMouseUp);
   }, [handleMouseUp]);
 
+
   const animateToCenter = useCallback(() => {
-    // Target is the grid center at MIN_SCALE
-    const targetTransform = calculateCenterTransform(MIN_SCALE, GRID_SIZE / 2, GRID_SIZE / 2);
+    // Target is the grid center at C.MIN_SCALE
+    const targetTransform = calculateCenterTransform(C.MIN_SCALE, C.GRID_SIZE / 2, C.GRID_SIZE / 2);
 
     setTransform(prevTransform => {
         const { scale, translateX, translateY } = prevTransform;
@@ -710,8 +543,8 @@ export default function FastVisualization({ handleClickAbout }) {
             return { scale, ...targetTransform };
         }
 
-        const newTranslateX = translateX + diffX * CENTER_SMOOTHING_FACTOR;
-        const newTranslateY = translateY + diffY * CENTER_SMOOTHING_FACTOR;
+        const newTranslateX = translateX + diffX * C.CENTER_SMOOTHING_FACTOR;
+        const newTranslateY = translateY + diffY * C.CENTER_SMOOTHING_FACTOR;
 
         smoothCenterTimeoutRef.current = setTimeout(animateToCenter, 16);
 
@@ -736,25 +569,25 @@ export default function FastVisualization({ handleClickAbout }) {
       const shouldZoomOut = direction === 'out';
 
       if (shouldZoomOut) {
-          if (oldScale <= MIN_SCALE) {
-              // PHASE 2: Hit MIN_SCALE, start smooth center snap
+          if (oldScale <= C.MIN_SCALE) {
+              // PHASE 2: Hit C.MIN_SCALE, start smooth center snap
               if (smoothCenterTimeoutRef.current === null) {
                   smoothCenterTimeoutRef.current = setTimeout(animateToCenter, 10);
               }
               return prevTransform;
           }
           // PHASE 1: Zoom out, keeping current cell fixed
-          newScale = Math.max(oldScale / factor, MIN_SCALE);
+          newScale = Math.max(oldScale / factor, C.MIN_SCALE);
       } else {
           // PHASE 1: Zoom in, keeping current cell fixed
-          newScale = Math.min(oldScale * factor, MAX_SCALE);
+          newScale = Math.min(oldScale * factor, C.MAX_SCALE);
       }
 
       if (newScale === oldScale) return prevTransform;
 
       // Calculate selected cell's center in grid space
-      const cellCenterX = (selected.x * (CELL_SIZE + CELL_GAP)) + CELL_SIZE / 2;
-      const cellCenterY = (selected.y * (CELL_SIZE + CELL_GAP)) + CELL_SIZE / 2;
+      const cellCenterX = (selected.x * (C.CELL_SIZE + C.CELL_GAP)) + C.CELL_SIZE / 2;
+      const cellCenterY = (selected.y * (C.CELL_SIZE + C.CELL_GAP)) + C.CELL_SIZE / 2;
 
       // Calculate the selected point's current screen position (PX, PY)
       const PX = cellCenterX * oldScale + oldTX;
@@ -775,7 +608,7 @@ export default function FastVisualization({ handleClickAbout }) {
   const startZoom = useCallback((direction) => {
       if (zoomIntervalRef.current) clearInterval(zoomIntervalRef.current);
       zoomIntervalRef.current = setInterval(() => {
-          applyZoom(direction, ZOOM_FACTOR);
+          applyZoom(direction, C.ZOOM_FACTOR);
       }, 10);
   }, [applyZoom]);
 
@@ -793,27 +626,24 @@ export default function FastVisualization({ handleClickAbout }) {
     //e.preventDefault();
     if (!isGridReady) return;
     const direction = e.deltaY < 0 ? 'in' : 'out';
-    applyZoom(direction, WHEEL_ZOOM_FACTOR);
+    applyZoom(direction, C.WHEEL_ZOOM_FACTOR);
   }, [isGridReady, applyZoom]);
 
   useEffect(() => {
     window.addEventListener('mouseup', stopZoom);
-    window.addEventListener('mouseup', handleMouseUp);
     return () => {
         window.removeEventListener('mouseup', stopZoom);
-        window.removeEventListener('mouseup', handleMouseUp);
         if (smoothCenterTimeoutRef.current) clearTimeout(smoothCenterTimeoutRef.current);
-        if (panAnimationRef.current) cancelAnimationFrame(panAnimationRef.current);
     }
-  }, [stopZoom, handleMouseUp]);
+  }, [stopZoom]);
 
-  const key = `${selected.x}_${GRID_SIZE - 1 - selected.y}`;
+  const key = `${selected.x}_${C.GRID_SIZE - 1 - selected.y}`;
   const selectedData = dataJson[key];
 
   // This transform is used to determine if the zoom-out button should be disabled
-  const fullCenterTransform = calculateCenterTransform(MIN_SCALE, GRID_SIZE / 2, GRID_SIZE / 2);
+  const fullCenterTransform = calculateCenterTransform(C.MIN_SCALE, C.GRID_SIZE / 2, C.GRID_SIZE / 2);
   const isPerfectlyCentered =
-    transform.scale === MIN_SCALE &&
+    transform.scale === C.MIN_SCALE &&
     Math.abs(transform.translateX - fullCenterTransform.translateX) < 1 &&
     Math.abs(transform.translateY - fullCenterTransform.translateY) < 1;
 
@@ -844,7 +674,7 @@ export default function FastVisualization({ handleClickAbout }) {
             style={{
               left: metadataPos.left,
               top: metadataPos.top,
-              transform: `translate(-50%, calc(-100% - ${CELL_SIZE * 8 + 10}px))`,
+              transform: `translate(-50%, calc(-100% - ${C.CELL_SIZE * 8 + 10}px))`,
               minWidth: 130,
             }}
           >
@@ -853,7 +683,7 @@ export default function FastVisualization({ handleClickAbout }) {
                 <span className="font-bold text-black">{selectedData.id}</span>
                 <span
                   style={{
-                    color: SOUND_TYPE_STYLES[selectedData.sound_type]?.color || "#555",
+                    color: C.SOUND_TYPE_STYLES[selectedData.sound_type]?.color || "#555",
                     fontWeight: 600,
                   }}
                 >
@@ -863,7 +693,7 @@ export default function FastVisualization({ handleClickAbout }) {
               <div className="flex items-center space-x-1 mt-1">
                 <span
                   style={{
-                    color: GENDER_COLORS[selectedData.gender] || "#555",
+                    color: C.GENDER_COLORS[selectedData.gender] || "#555",
                     fontWeight: 600,
                   }}
                 >
@@ -871,7 +701,7 @@ export default function FastVisualization({ handleClickAbout }) {
                 </span>
                 <span
                   style={{
-                    color: AGE_COLORS(selectedData.age),
+                    color: C.AGE_COLORS(selectedData.age),
                     fontWeight: 600,
                   }}
                 >
@@ -880,7 +710,7 @@ export default function FastVisualization({ handleClickAbout }) {
               </div>
             </div>
             <div className="ml-2 text-2xl">
-              {SOUND_TYPE_STYLES[selectedData.sound_type]?.emoji || "🎧"}
+              {C.SOUND_TYPE_STYLES[selectedData.sound_type]?.emoji || "🎧"}
             </div>
           </div>
         )}
@@ -898,7 +728,7 @@ export default function FastVisualization({ handleClickAbout }) {
             onMouseDown={handleZoomInStart}
             onMouseUp={stopZoom}
             onMouseLeave={stopZoom}
-            disabled={transform.scale >= MAX_SCALE}
+            disabled={transform.scale >= C.MAX_SCALE}
           >
             +
           </ZoomButton>
@@ -916,10 +746,10 @@ export default function FastVisualization({ handleClickAbout }) {
           <SearchBar
             filters={filters}
             setFilters={setFilters}
-            SOUND_TYPE_STYLES={SOUND_TYPE_STYLES}
-            GENDER_COLORS={GENDER_COLORS}
-            AGE_RANGES={AGE_RANGES}
-            AGE_COLORS={AGE_COLORS}
+            SOUND_TYPE_STYLES={C.SOUND_TYPE_STYLES}
+            GENDER_COLORS={C.GENDER_COLORS}
+            AGE_RANGES={C.AGE_RANGES}
+            AGE_COLORS={C.AGE_COLORS}
           />
         </div>
 
@@ -954,7 +784,7 @@ export default function FastVisualization({ handleClickAbout }) {
           {colorMode !== "None" && (
             <div className="mt-2 space-y-1 text-xs">
               {colorMode === "Age" &&
-                Object.entries(AGE_RANGE_TO_COLOR).map(([range, color]) => (
+                Object.entries(C.AGE_RANGE_TO_COLOR).map(([range, color]) => (
                   <div key={range} className="flex items-center space-x-2">
                     <span
                       className="w-3 h-3 rounded"
@@ -965,7 +795,7 @@ export default function FastVisualization({ handleClickAbout }) {
                 ))}
 
               {colorMode === "Gender" &&
-                Object.entries(GENDER_COLORS).map(([gender, color]) => (
+                Object.entries(C.GENDER_COLORS).map(([gender, color]) => (
                   <div key={gender} className="flex items-center space-x-2">
                     <span
                       className="w-3 h-3 rounded"
@@ -976,7 +806,7 @@ export default function FastVisualization({ handleClickAbout }) {
                 ))}
 
               {colorMode === "Sound Type" &&
-                Object.entries(SOUND_TYPE_STYLES).map(([type, { color }]) => (
+                Object.entries(C.SOUND_TYPE_STYLES).map(([type, { color }]) => (
                   <div key={type} className="flex items-center space-x-2">
                     <span
                       className="w-3 h-3 rounded"
