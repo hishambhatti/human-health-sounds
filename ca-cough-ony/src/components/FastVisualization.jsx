@@ -55,10 +55,19 @@ export default function FastVisualization({ handleClickAbout }) {
 
   const trailHighlightsRef = useRef([]);
 
-  const PAN_EDGE_THRESHOLD = 100;   // px from edge to start panning
-  const PAN_SPEED = 0.04;         // smaller = slower pan (tune)
+  const PAN_EDGE_THRESHOLD = 50;   // px from edge to start panning
+  const PAN_SPEED = 0.05;         // smaller = slower pan (tune)
   const panDirectionRef = useRef({ dx: 0, dy: 0 });
   const isPanningRef = useRef(false);
+
+  function getAxisPanIntent(e, rect, threshold) {
+    return {
+      nearLeft:   e.clientX < rect.left + threshold,
+      nearRight:  e.clientX > rect.right - threshold,
+      nearTop:    e.clientY < rect.top + threshold,
+      nearBottom: e.clientY > rect.bottom - threshold
+    };
+  }
 
   function getPanVector(clientX, clientY, rect) {
     const centerX = rect.left + rect.width / 2;
@@ -536,20 +545,22 @@ export default function FastVisualization({ handleClickAbout }) {
     const rect = canvasRef.current.getBoundingClientRect();
     lastMousePos.current = { x: e.clientX, y: e.clientY };
 
-    // Only start panning if near the edge band
-    const nearEdge =
-      e.clientX < rect.left + PAN_EDGE_THRESHOLD ||
-      e.clientX > rect.right - PAN_EDGE_THRESHOLD ||
-      e.clientY < rect.top + PAN_EDGE_THRESHOLD ||
-      e.clientY > rect.bottom - PAN_EDGE_THRESHOLD;
+    const threshold = 25 * transform.scale + 80
+    const edges = getAxisPanIntent(e, rect, threshold);
 
-    if (isMouseDownRef.current && nearEdge) {
-      const { vx, vy } = getPanVector(e.clientX, e.clientY, rect);
-      panDirectionRef.current = { vx, vy };
-      isPanningRef.current = true;
-    } else {
-      isPanningRef.current = false;
-    }
+    // compute raw direction
+    const { vx, vy } = getPanVector(e.clientX, e.clientY, rect);
+
+    // allow panning only if near that edge AND direction matches that axis
+    let px = 0, py = 0;
+
+    if (edges.nearRight && vx > 0) px = vx;
+    if (edges.nearLeft  && vx < 0) px = vx;
+    if (edges.nearBottom && vy > 0) py = vy;
+    if (edges.nearTop    && vy < 0) py = vy;
+
+    panDirectionRef.current = { vx: px, vy: py };
+    isPanningRef.current = (px !== 0 || py !== 0);
 
     // still do your cell selection
     const { x, y } = getCellCoordinates(e);
@@ -597,31 +608,47 @@ export default function FastVisualization({ handleClickAbout }) {
       return () => window.removeEventListener('mouseup', handleMouseUp);
   }, [handleMouseUp]);
 
+  function clampPanToGrid(vx, vy, selX, selY) {
+  let cx = vx, cy = vy;
+
+  // Right boundary
+  if (selX === C.GRID_SIZE - 1 && vx > 0) cx = 0;
+  // Left boundary
+  if (selX === 0 && vx < 0) cx = 0;
+  // Bottom boundary
+  if (selY === C.GRID_SIZE - 1 && vy > 0) cy = 0;
+  // Top boundary
+  if (selY === 0 && vy < 0) cy = 0;
+
+  return { vx: cx, vy: cy };
+}
+
   useEffect(() => {
   let rafId;
 
   const panLoop = () => {
     if (isPanningRef.current) {
-      setTransform(prev => {
-    const { vx, vy } = panDirectionRef.current;
+      const { vx, vy } = panDirectionRef.current;
 
-    // Move in screen space, not grid-space
-    const px = vx * PAN_SPEED * 100;
-    const py = vy * PAN_SPEED * 100;
+      // ✅ apply grid edge stop
+      const { vx: cx, vy: cy } = clampPanToGrid(vx, vy, selected.x, selected.y);
 
-    return {
-      ...prev,
-      translateX: prev.translateX - px,
-      translateY: prev.translateY - py
-    };
-  });
+      if (cx !== 0 || cy !== 0) {
+        setTransform(prev => ({
+          ...prev,
+          translateX: prev.translateX - cx * PAN_SPEED * 100,
+          translateY: prev.translateY - cy * PAN_SPEED * 100
+        }));
 
-      // Now auto-select new cells as we move
-      const fakeEvent = {
-        clientX: lastMousePos.current.x,
-        clientY: lastMousePos.current.y
-      };
-      handleCellSelect(...Object.values(getCellCoordinates(fakeEvent)));
+        const fakeEvent = {
+          clientX: lastMousePos.current.x,
+          clientY: lastMousePos.current.y
+        };
+        handleCellSelect(...Object.values(getCellCoordinates(fakeEvent)));
+      } else {
+        // ✅ stop panning if both components blocked
+        isPanningRef.current = false;
+      }
     }
 
     rafId = requestAnimationFrame(panLoop);
@@ -629,9 +656,7 @@ export default function FastVisualization({ handleClickAbout }) {
 
   rafId = requestAnimationFrame(panLoop);
   return () => cancelAnimationFrame(rafId);
-}, [getCellCoordinates, handleCellSelect]);
-
-
+}, [getCellCoordinates, handleCellSelect, selected.x, selected.y]);
 
   const animateToCenter = useCallback(() => {
     // Target is the grid center at C.MIN_SCALE
