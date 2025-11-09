@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useState, useRef, useCallback } from "react";
-import dataJson from "../vocalsound_wav.json"; // change to .mp3 if need space
+import dataJson from "../vocalsound_mp3.json"; // change to .mp3 if need space
 import SearchBar from "./SearchBar";
 import LoadingScreen from "./LoadingSpinner";
 import AboutButton from "./AboutButton";
@@ -9,7 +9,7 @@ import { checkFilters, darkenColor, getAxisPanIntent, getPanVector, findNearestV
 
 const SPRITESHEET_PATH = "precomposed_grid_32.png";
 const CANVAS_DRAW_SIZE = C.GRID_SIZE * C.CELL_SIZE;
-const masterAudioURL = "all_sounds_combined.wav";  // change to .mp3 if need space
+const masterAudioURL = "all_sounds_combined.mp3";  // change to .mp3 if need space
 const preloadedAudio = new Audio(masterAudioURL);
 preloadedAudio.preload = "auto";
 
