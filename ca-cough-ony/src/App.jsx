@@ -1,35 +1,32 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import Landing from "./components/Landing"
+import { useState } from "react"
+import About from "./components/About"
+import FastVisualization from "./components/FastVisualization"
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+
+  const [pageNum, setPageNum] = useState(1)
+
+  function handleClickAbout() {
+    setPageNum(3)
+  }
+
+  function handleClickExplore() {
+    console.log("EXPLORE")
+    setPageNum(2)
+  }
 
   return (
     <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      {pageNum === 1 && (
+        <Landing handleClickAbout={handleClickAbout} handleClickExplore={handleClickExplore}/>
+      )}
+      {pageNum === 2 && (
+        <FastVisualization handleClickAbout={handleClickAbout}/>
+      )}
+      {pageNum === 3 && (
+        <About handleClickExplore={handleClickExplore}/>
+      )}
     </>
   )
 }
-
-export default App
