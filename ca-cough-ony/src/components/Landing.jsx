@@ -4,8 +4,8 @@ export default function Landing({ handleClickAbout, handleClickExplore }) {
   return (
     <div className='min-h-screen bg-[#f4f3ef] flex flex-col items-center justify-center text-center bg-cover bg-no-repeat bg-center px-4'>
       {/* Title */}
-      <h1 className='text-4xl md:text-5xl font-light tracking-widest mb-2 font-[Poppins,sans-serif]'>
-        CaCOUGHony
+      <h1 className='text-4xl md:text-5xl font-light mb-2 font-[Poppins,sans-serif]'>
+        Human Health Sounds
       </h1>
 
       {/* Divider */}

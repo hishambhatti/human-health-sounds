@@ -5,7 +5,7 @@ export default function About({ handleClickExplore }) {
     <div className='min-h-screen bg-[#f4f3ef] flex flex-col items-center py-10 px-6 font-[Poppins,sans-serif]'>
       {/* Title */}
       <h1 className='text-3xl font-light tracking-wide mb-8 text-gray-800'>
-        CaCOUGHony
+        Human Health Sounds
       </h1>
 
       {/* Image (placeholder for video) */}
